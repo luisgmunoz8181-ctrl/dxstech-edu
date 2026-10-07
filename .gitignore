@@ -1,0 +1,40 @@
+# Binaries and build artifacts
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+scratch/
+
+# Local database and runtime storage
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Archives and temporary files
+*.zip
+*.tar.gz
+*.log
+*.tmp
+
+# Environment variables and secrets
+.env*
+!.env.example
+
+# Editor and agent configurations
+.gemini/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Operating system files
+Thumbs.db
+Desktop.ini
+.DS_Store

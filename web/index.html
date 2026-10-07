@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DxSTech Edu — Plataforma Educativa Premium</title>
+  
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              300: '#a5b4fc',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- SheetJS for Excel Reading -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    /* Custom smooth scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .fade-enter {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    .fade-enter-active {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 200ms ease, transform 200ms ease;
+    }
+  </style>
+</head>
+<body class="h-full bg-slate-50 text-slate-900 flex flex-col md:flex-row antialiased overflow-hidden">
+
+  <!-- Desktop Sidebar -->
+  <aside class="hidden md:flex flex-col w-64 bg-white border-r border-slate-200/80 z-20 shrink-0">
+    <!-- Brand Logo -->
+    <div class="h-16 flex items-center px-6 border-b border-slate-100 gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white shadow-md shadow-indigo-100 font-bold text-lg">
+        D
+      </div>
+      <div>
+        <h1 class="font-bold text-slate-900 tracking-tight leading-tight">DxSTech <span class="text-indigo-600 font-semibold">Edu</span></h1>
+        <p class="text-[10px] text-slate-400 font-medium tracking-wide uppercase">Academy & AI Suite</p>
+      </div>
+    </div>
+
+    <!-- Navigation Links -->
+    <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+      <button data-nav="certificates" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+        <i data-lucide="award" class="w-5 h-5 text-slate-400 transition-colors"></i>
+        <span>Certificados</span>
+      </button>
+
+      <button data-nav="quizzes" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+        <i data-lucide="sparkles" class="w-5 h-5 text-slate-400 transition-colors"></i>
+        <span>Evaluaciones IA</span>
+      </button>
+
+      <button data-nav="whatsapp" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+        <i data-lucide="message-square" class="w-5 h-5 text-slate-400 transition-colors"></i>
+        <span>WhatsApp + Bot</span>
+      </button>
+
+      <button data-nav="settings" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+        <i data-lucide="settings" class="w-5 h-5 text-slate-400 transition-colors"></i>
+        <span>Configuración</span>
+      </button>
+    </nav>
+
+    <!-- Sidebar Footer / Gemini Key Status -->
+    <div class="p-4 border-t border-slate-100">
+      <div id="sidebar-key-status" class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 cursor-pointer hover:bg-slate-100 transition-all">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+            <i data-lucide="key" class="w-3.5 h-3.5 text-indigo-500"></i> Gemini Key
+          </span>
+          <span id="key-badge" class="w-2 h-2 rounded-full bg-amber-400 ring-4 ring-amber-100"></span>
+        </div>
+        <p id="key-status-text" class="text-[11px] text-slate-500 leading-tight truncate">No configurada</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile Floating iOS-style Bottom Bar -->
+  <nav class="md:hidden fixed bottom-4 inset-x-4 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 z-40 px-3 py-2 flex items-center justify-around">
+    <button data-nav="certificates" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
+      <i data-lucide="award" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">Certificados</span>
+    </button>
+    <button data-nav="quizzes" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
+      <i data-lucide="sparkles" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">Quizzes IA</span>
+    </button>
+    <button data-nav="whatsapp" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
+      <i data-lucide="message-square" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">WhatsApp</span>
+    </button>
+    <button data-nav="settings" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
+      <i data-lucide="settings" class="w-5 h-5"></i>
+      <span class="text-[10px] font-medium">Ajustes</span>
+    </button>
+  </nav>
+
+  <!-- Main Content Wrapper -->
+  <div class="flex-1 flex flex-col h-full overflow-hidden">
+    <!-- Top Header Bar -->
+    <header class="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-3">
+        <!-- Mobile Logo Icon -->
+        <div class="md:hidden w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+          D
+        </div>
+        <div>
+          <h2 id="view-title" class="text-base font-bold text-slate-800 tracking-tight">Certificados</h2>
+          <p id="view-subtitle" class="text-xs text-slate-400 hidden sm:block">Generación masiva y diseño interactivo en alta fidelidad</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Quick Header API Key Indicator -->
+        <button id="header-key-btn" class="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-all text-slate-700">
+          <span id="header-key-dot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+          <span id="header-key-label">Gemini: Pendiente</span>
+        </button>
+
+        <a href="/api/health" target="_blank" class="hidden sm:flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium transition-colors border border-emerald-200">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          API Health: OK
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Dynamic View Container -->
+    <main id="app-content" class="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto pb-24 md:pb-8">
+      <!-- Injected view content here -->
+    </main>
+  </div>
+
+  <!-- Global Toast Notifications Container -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Global Modal Dialog Container -->
+  <div id="modal-container" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm hidden"></div>
+
+  <!-- Main ES Module Entry Point -->
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

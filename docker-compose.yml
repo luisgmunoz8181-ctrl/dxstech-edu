@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  dxstech-edu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dxstech-edu:latest
+    container_name: dxstech-edu
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - APP_ENV=${APP_ENV:-production}
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DATA_DIR=/app/data
+    volumes:
+      - dxstech_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  dxstech_data:
+    name: dxstech_edu_data

@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+.github
+
+# Binaries & scratch
+bin/
+scratch/
+
+# Node dependencies
+node_modules/
+
+# Local databases & persistent data
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Compressed archives & temporary files
+*.zip
+*.tar.gz
+*.log
+*.tmp
+
+# Environment & IDE configurations
+.env*
+.gemini/
+.vscode/
+.idea/

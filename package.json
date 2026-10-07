@@ -1,0 +1,21 @@
+{
+  "name": "dxstech-edu",
+  "version": "1.0.0",
+  "description": "DxSTech Edu - Plataforma Educativa Premium",
+  "private": true,
+  "scripts": {
+    "dev": "go run ./cmd/server",
+    "build": "go build -o bin/server.exe ./cmd/server",
+    "start": "go run ./cmd/server"
+  },
+  "keywords": [
+    "education",
+    "certificates",
+    "quizzes",
+    "whatsapp",
+    "gemini",
+    "ai"
+  ],
+  "author": "DxSTech",
+  "license": "MIT"
+}
