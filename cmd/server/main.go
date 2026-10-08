@@ -18,6 +18,7 @@ import (
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/courses"
 	"dxstech-edu/internal/database"
+	"dxstech-edu/internal/enrollments"
 	"dxstech-edu/internal/quizzes"
 	"dxstech-edu/internal/whatsapp"
 
@@ -48,6 +49,8 @@ func main() {
 	authHandler := auth.NewHandler(authService, !cfg.IsDevelopment())
 	courseService := courses.NewService(db, cfg.DataDir)
 	courseHandler := courses.NewHandler(courseService)
+	enrollService := enrollments.NewService(db)
+	enrollHandler := enrollments.NewHandler(enrollService)
 	certService := certificates.NewService(db)
 	quizService := quizzes.NewService(db, geminiClient)
 	waService := whatsapp.NewService(db, geminiClient, cfg)
@@ -77,6 +80,7 @@ func main() {
 
 		authHandler.RegisterRoutes(api.Group("/auth"))
 		courseHandler.RegisterRoutes(api.Group("/courses"))
+		enrollHandler.RegisterRoutes(api.Group("/enrollments"))
 		certService.RegisterRoutes(api.Group("/certificates"))
 		quizService.RegisterRoutes(api.Group("/quizzes"))
 		waService.RegisterRoutes(api.Group("/whatsapp"))

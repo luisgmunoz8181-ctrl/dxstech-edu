@@ -177,6 +177,34 @@ func runMigrations(db *sql.DB) error {
 		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 	);
 
+	CREATE TABLE IF NOT EXISTS enrollments (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		course_id TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'active',
+		progress_percent REAL NOT NULL DEFAULT 0.0,
+		enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		completed_at DATETIME,
+		last_accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_lesson_id TEXT,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+		UNIQUE (user_id, course_id)
+	);
+
+	CREATE TABLE IF NOT EXISTS lesson_progress (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		course_id TEXT NOT NULL,
+		lesson_id TEXT NOT NULL,
+		completed INTEGER NOT NULL DEFAULT 1,
+		completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+		FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+		UNIQUE (user_id, lesson_id)
+	);
+
 	INSERT OR IGNORE INTO whatsapp_config (id, is_active, knowledge_base, strict_mode, respond_groups, provider)
 	VALUES (1, 1, 'DxSTech Edu es una academia digital líder en tecnología, programación e inteligencia artificial. Ofrecemos cursos prácticos con proyectos reales, tutoría personalizada y certificados digitales verificados.', 1, 0, 'Simulador / Baileys QR');
 	`
@@ -189,7 +217,11 @@ func runMigrations(db *sql.DB) error {
 		return err
 	}
 
-	return seedDemoCourses(db)
+	if err := seedDemoCourses(db); err != nil {
+		return err
+	}
+
+	return seedDemoEnrollments(db)
 }
 
 func seedDefaultUsers(db *sql.DB) error {
@@ -345,6 +377,45 @@ func seedDemoCourses(db *sql.DB) error {
 	_, err = db.Exec(`
 		INSERT INTO lessons (id, module_id, course_id, title, description, content_type, content_url, content_body, duration_minutes, order_index, is_free_preview) VALUES
 		('lsn-dev-01', 'mod-dev-01', 'crs-dev-201', 'Instalación y Tu Primer Servidor en Go', 'Configuración del entorno y primeros pasos.', 'text', '', 'Bienvenido al curso de desarrollo full-stack. En esta primera sesión configuraremos Go 1.25 y exploraremos el paquete net/http.', 15, 1, 1)
+	`)
+
+	return err
+}
+
+func seedDemoEnrollments(db *sql.DB) error {
+	var count int
+	err := db.QueryRow("SELECT COUNT(*) FROM enrollments").Scan(&count)
+	if err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	// Matricular estudiante demo en curso de IA
+	_, err = db.Exec(`
+		INSERT INTO enrollments (
+			id, user_id, course_id, status, progress_percent,
+			enrolled_at, last_accessed_at, last_lesson_id
+		) VALUES (
+			'enr-demo-student-01',
+			'usr-student-01',
+			'crs-ai-101',
+			'active',
+			20.0,
+			CURRENT_TIMESTAMP,
+			CURRENT_TIMESTAMP,
+			'lsn-ai-01'
+		)
+	`)
+	if err != nil {
+		return err
+	}
+
+	// Marcar lección 1 como completada
+	_, err = db.Exec(`
+		INSERT INTO lesson_progress (id, user_id, course_id, lesson_id, completed, completed_at)
+		VALUES ('prg-demo-01', 'usr-student-01', 'crs-ai-101', 'lsn-ai-01', 1, CURRENT_TIMESTAMP)
 	`)
 
 	return err

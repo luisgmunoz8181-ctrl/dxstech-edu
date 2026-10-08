@@ -4,8 +4,13 @@ import { Loading } from '../components/loading.js';
 
 export const CoursesView = {
   courses: [],
+  myEnrollments: [],
+  studentStats: null,
+  activeTab: 'all', // 'all' | 'my-courses'
   selectedCourse: null,
   selectedLesson: null,
+  courseEnrollment: null,
+  completedLessons: [],
   search: '',
   categoryFilter: 'all',
   statusFilter: 'all',
@@ -20,6 +25,8 @@ export const CoursesView = {
   renderCatalogView() {
     const user = window.router?.currentUser;
     const isAdmin = user && ['SUPERADMIN', 'ADMINISTRADOR'].includes(user.role);
+    const isStudent = user && user.role === 'ESTUDIANTE';
+    const stats = this.studentStats;
 
     return `
       <div class="space-y-6 max-w-7xl mx-auto">
@@ -31,11 +38,11 @@ export const CoursesView = {
               <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 uppercase tracking-wider">
                 Academia Digital & LMS
               </span>
-              <span class="text-xs text-indigo-300">• Programas de Capacitación</span>
+              <span class="text-xs text-indigo-300">• Aula Virtual DxSTech</span>
             </div>
             <h3 class="text-2xl sm:text-3xl font-black tracking-tight">Catálogo de Cursos & Aulas Virtuales</h3>
             <p class="text-xs sm:text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
-              Explora contenidos educativos estructurados por módulos y lecciones. Accede a documentos PDF, presentaciones PPTX, videos interactivos y simuladores guiados.
+              Explora programas de capacitación por módulos y lecciones. Accede a documentos PDF, presentaciones PPTX, videos interactivos y registra tu avance académico.
             </p>
           </div>
 
@@ -47,37 +54,90 @@ export const CoursesView = {
           ` : ''}
         </div>
 
-        <!-- Filter & Search Toolbar -->
+        <!-- Student Stats Ribbon (If authenticated and has stats) -->
+        ${(user && stats) ? `
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                <i data-lucide="book-marked" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-[11px] font-semibold text-slate-400 leading-none">Matriculados</p>
+                <p class="text-lg font-black text-slate-900 mt-1">${stats.totalEnrolled}</p>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                <i data-lucide="clock" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-[11px] font-semibold text-slate-400 leading-none">En Progreso</p>
+                <p class="text-lg font-black text-slate-900 mt-1">${stats.inProgress}</p>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                <i data-lucide="award" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-[11px] font-semibold text-slate-400 leading-none">Completados</p>
+                <p class="text-lg font-black text-slate-900 mt-1">${stats.completed}</p>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-2xs flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+                <i data-lucide="trending-up" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-[11px] font-semibold text-slate-400 leading-none">Avance Promedio</p>
+                <p class="text-lg font-black text-slate-900 mt-1">${Math.round(stats.averageProgress)}%</p>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Tabs & Filters Toolbar -->
         <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-          <div class="relative w-full md:w-80">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <i data-lucide="search" class="w-4 h-4"></i>
-            </span>
-            <input type="text" id="course-search-input" value="${this.search}" placeholder="Buscar curso por título, código..." class="w-full text-xs rounded-xl border border-slate-200 pl-9 pr-3.5 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-all">
+          <!-- View Tabs (if user is authenticated) -->
+          <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-full md:w-auto">
+            <button id="tab-all-courses" class="flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${this.activeTab === 'all' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+              Todos los Cursos (${this.courses.length})
+            </button>
+            ${user ? `
+              <button id="tab-my-courses" class="flex-1 md:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${this.activeTab === 'my-courses' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                Mis Cursos (${this.myEnrollments.length})
+              </button>
+            ` : ''}
           </div>
 
           <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div class="flex items-center gap-2">
-              <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">Categoría:</label>
-              <select id="course-category-filter" class="text-xs rounded-xl border border-slate-200 px-3 py-2 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
-                <option value="all" ${this.categoryFilter === 'all' ? 'selected' : ''}>Todas las categorías</option>
-                <option value="Inteligencia Artificial" ${this.categoryFilter === 'Inteligencia Artificial' ? 'selected' : ''}>Inteligencia Artificial</option>
-                <option value="Desarrollo Web" ${this.categoryFilter === 'Desarrollo Web' ? 'selected' : ''}>Desarrollo Web</option>
-                <option value="Ciberseguridad" ${this.categoryFilter === 'Ciberseguridad' ? 'selected' : ''}>Ciberseguridad</option>
-                <option value="Tecnología" ${this.categoryFilter === 'Tecnología' ? 'selected' : ''}>Tecnología</option>
-              </select>
+            <!-- Search bar -->
+            <div class="relative w-full sm:w-64">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <i data-lucide="search" class="w-4 h-4"></i>
+              </span>
+              <input type="text" id="course-search-input" value="${this.search}" placeholder="Buscar curso o código..." class="w-full text-xs rounded-xl border border-slate-200 pl-9 pr-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
             </div>
 
+            <!-- Category filter -->
+            <select id="course-category-filter" class="text-xs rounded-xl border border-slate-200 px-3 py-2 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
+              <option value="all" ${this.categoryFilter === 'all' ? 'selected' : ''}>Todas las categorías</option>
+              <option value="Inteligencia Artificial" ${this.categoryFilter === 'Inteligencia Artificial' ? 'selected' : ''}>Inteligencia Artificial</option>
+              <option value="Desarrollo Web" ${this.categoryFilter === 'Desarrollo Web' ? 'selected' : ''}>Desarrollo Web</option>
+              <option value="Ciberseguridad" ${this.categoryFilter === 'Ciberseguridad' ? 'selected' : ''}>Ciberseguridad</option>
+              <option value="Tecnología" ${this.categoryFilter === 'Tecnología' ? 'selected' : ''}>Tecnología</option>
+            </select>
+
             ${isAdmin ? `
-              <div class="flex items-center gap-2">
-                <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">Estado:</label>
-                <select id="course-status-filter" class="text-xs rounded-xl border border-slate-200 px-3 py-2 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
-                  <option value="all" ${this.statusFilter === 'all' ? 'selected' : ''}>Todos los estados</option>
-                  <option value="published" ${this.statusFilter === 'published' ? 'selected' : ''}>Publicados</option>
-                  <option value="draft" ${this.statusFilter === 'draft' ? 'selected' : ''}>Borradores</option>
-                  <option value="archived" ${this.statusFilter === 'archived' ? 'selected' : ''}>Archivados</option>
-                </select>
-              </div>
+              <select id="course-status-filter" class="text-xs rounded-xl border border-slate-200 px-3 py-2 bg-slate-50 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
+                <option value="all" ${this.statusFilter === 'all' ? 'selected' : ''}>Todos los estados</option>
+                <option value="published" ${this.statusFilter === 'published' ? 'selected' : ''}>Publicados</option>
+                <option value="draft" ${this.statusFilter === 'draft' ? 'selected' : ''}>Borradores</option>
+                <option value="archived" ${this.statusFilter === 'archived' ? 'selected' : ''}>Archivados</option>
+              </select>
             ` : ''}
           </div>
         </div>
@@ -96,8 +156,11 @@ export const CoursesView = {
   renderClassroomView() {
     const c = this.selectedCourse;
     const l = this.selectedLesson;
+    const enr = this.courseEnrollment;
     const user = window.router?.currentUser;
     const isAdmin = user && ['SUPERADMIN', 'ADMINISTRADOR'].includes(user.role);
+    const progressPercent = enr ? Math.round(enr.progressPercent) : 0;
+    const isCompleted = enr && enr.status === 'completed';
 
     return `
       <div class="space-y-6 max-w-7xl mx-auto">
@@ -113,13 +176,37 @@ export const CoursesView = {
                   ${c.category}
                 </span>
                 <span class="text-xs font-mono font-bold text-slate-400">${c.code}</span>
+                ${isCompleted ? `
+                  <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                    <i data-lucide="award" class="w-3 h-3 text-emerald-600"></i> Completado
+                  </span>
+                ` : ''}
               </div>
               <h3 class="text-lg font-black text-slate-900 leading-tight mt-0.5">${c.title}</h3>
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+            <!-- Progress Bar / Enroll Button -->
+            ${user ? (enr ? `
+              <div class="flex items-center gap-2.5">
+                <div class="w-28 sm:w-40 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                  <div class="bg-gradient-to-r from-indigo-500 to-emerald-500 h-2 rounded-full transition-all duration-500" style="width: ${progressPercent}%"></div>
+                </div>
+                <span class="text-xs font-bold text-slate-700 font-mono">${progressPercent}%</span>
+              </div>
+            ` : `
+              <button id="enroll-course-header-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                <span>Inscribirme en este Curso</span>
+              </button>
+            `) : ''}
+
             ${isAdmin ? `
+              <button id="view-students-btn" class="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer" title="Ver estudiantes matriculados">
+                <i data-lucide="users" class="w-3.5 h-3.5 text-indigo-600"></i>
+                <span class="hidden md:inline">Alumnos</span>
+              </button>
               <button id="add-module-btn" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                 <span>Nuevo Módulo</span>
@@ -156,13 +243,13 @@ export const CoursesView = {
 
                     ${isAdmin ? `
                       <div class="flex items-center gap-1">
-                        <button data-add-lesson-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors" title="Añadir Lección">
+                        <button data-add-lesson-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer" title="Añadir Lección">
                           <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                         </button>
-                        <button data-edit-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors" title="Editar Módulo">
+                        <button data-edit-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer" title="Editar Módulo">
                           <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                         </button>
-                        <button data-del-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-white transition-colors" title="Eliminar Módulo">
+                        <button data-del-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-white transition-colors cursor-pointer" title="Eliminar Módulo">
                           <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                         </button>
                       </div>
@@ -173,6 +260,7 @@ export const CoursesView = {
                   <div class="p-1.5 space-y-1">
                     ${(m.lessons && m.lessons.length > 0) ? m.lessons.map(lsn => {
                       const isCurrent = l && l.id === lsn.id;
+                      const isCompleted = this.completedLessons.includes(lsn.id);
                       const iconName = {
                         youtube: 'video',
                         mp4: 'film',
@@ -184,7 +272,11 @@ export const CoursesView = {
                       return `
                         <div class="group flex items-center justify-between p-2 rounded-xl text-xs transition-all cursor-pointer ${isCurrent ? 'bg-indigo-600 text-white font-bold shadow-xs' : 'text-slate-700 hover:bg-slate-200/60 font-medium'}">
                           <div data-select-lesson="${lsn.id}" class="flex-1 flex items-center gap-2.5 truncate">
-                            <i data-lucide="${iconName}" class="w-4 h-4 shrink-0 ${isCurrent ? 'text-indigo-200' : 'text-slate-400'}"></i>
+                            ${isCompleted ? `
+                              <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 ${isCurrent ? 'text-emerald-300' : 'text-emerald-500'}"></i>
+                            ` : `
+                              <i data-lucide="${iconName}" class="w-4 h-4 shrink-0 ${isCurrent ? 'text-indigo-200' : 'text-slate-400'}"></i>
+                            `}
                             <span class="truncate">${lsn.title}</span>
                           </div>
 
@@ -197,10 +289,10 @@ export const CoursesView = {
                             <span class="text-[10px] ${isCurrent ? 'text-indigo-200' : 'text-slate-400'}">${lsn.durationMinutes}m</span>
 
                             ${isAdmin ? `
-                              <button data-edit-lesson="${lsn.id}" class="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors hidden group-hover:block" title="Editar lección">
+                              <button data-edit-lesson="${lsn.id}" class="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors hidden group-hover:block cursor-pointer" title="Editar lección">
                                 <i data-lucide="edit-2" class="w-3 h-3"></i>
                               </button>
-                              <button data-del-lesson="${lsn.id}" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors hidden group-hover:block" title="Eliminar lección">
+                              <button data-del-lesson="${lsn.id}" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors hidden group-hover:block cursor-pointer" title="Eliminar lección">
                                 <i data-lucide="trash" class="w-3 h-3"></i>
                               </button>
                             ` : ''}
@@ -243,6 +335,10 @@ export const CoursesView = {
   },
 
   renderLessonContent(l) {
+    const isCompleted = this.completedLessons.includes(l.id);
+    const nextLesson = this.getNextLesson(l.id);
+    const user = window.router?.currentUser;
+
     let viewerHTML = '';
 
     if (l.contentType === 'youtube') {
@@ -317,15 +413,34 @@ export const CoursesView = {
 
     return `
       <div class="space-y-6">
-        <div>
-          <div class="flex items-center gap-2 mb-1">
-            <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 uppercase tracking-wider">
-              Lección Activa
-            </span>
-            <span class="text-xs text-slate-400 font-semibold">• ${l.durationMinutes} minutos estimados</span>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 uppercase tracking-wider">
+                Lección Activa
+              </span>
+              <span class="text-xs text-slate-400 font-semibold">• ${l.durationMinutes} minutos estimados</span>
+            </div>
+            <h3 class="text-xl font-black text-slate-900">${l.title}</h3>
+            ${l.description ? `<p class="text-xs text-slate-500 mt-1">${l.description}</p>` : ''}
           </div>
-          <h3 class="text-xl font-black text-slate-900">${l.title}</h3>
-          ${l.description ? `<p class="text-xs text-slate-500 mt-1">${l.description}</p>` : ''}
+
+          <!-- Progress Action Buttons -->
+          ${user ? `
+            <div class="flex items-center gap-2 shrink-0">
+              <button id="toggle-lesson-progress-btn" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'}">
+                <i data-lucide="${isCompleted ? 'check-circle-2' : 'check'}" class="w-4 h-4"></i>
+                <span>${isCompleted ? 'Lección Completada ✓' : 'Marcar como Completada'}</span>
+              </button>
+
+              ${nextLesson ? `
+                <button id="next-lesson-btn" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer">
+                  <span>Siguiente</span>
+                  <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                </button>
+              ` : ''}
+            </div>
+          ` : ''}
         </div>
 
         ${viewerHTML}
@@ -333,12 +448,53 @@ export const CoursesView = {
     `;
   },
 
-  mount() {
+  getNextLesson(currentLessonId) {
+    if (!this.selectedCourse) return null;
+    let allLessons = [];
+    for (const mod of this.selectedCourse.modules || []) {
+      for (const lsn of mod.lessons || []) {
+        allLessons.push(lsn);
+      }
+    }
+    const currentIndex = allLessons.findIndex(l => l.id === currentLessonId);
+    if (currentIndex >= 0 && currentIndex < allLessons.length - 1) {
+      return allLessons[currentIndex + 1];
+    }
+    return null;
+  },
+
+  async mount() {
     this.bindEvents();
+    await this.fetchEnrollmentsAndStats();
     if (!this.selectedCourse) {
-      this.fetchCourses();
+      await this.fetchCourses();
     }
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  async fetchEnrollmentsAndStats() {
+    const user = window.router?.currentUser;
+    if (!user) {
+      this.myEnrollments = [];
+      this.studentStats = null;
+      return;
+    }
+
+    try {
+      const [resEnr, resStats] = await Promise.all([
+        fetch('/api/enrollments/my-courses'),
+        fetch('/api/enrollments/stats'),
+      ]);
+
+      if (resEnr.ok) {
+        this.myEnrollments = await resEnr.json();
+      }
+      if (resStats.ok) {
+        this.studentStats = await resStats.json();
+      }
+    } catch {
+      // Ignorar errores no críticos de red
+    }
   },
 
   bindEvents() {
@@ -347,7 +503,7 @@ export const CoursesView = {
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         this.search = e.target.value;
-        this.fetchCourses();
+        this.renderCoursesGrid();
       });
     }
 
@@ -369,6 +525,23 @@ export const CoursesView = {
       });
     }
 
+    // Tabs
+    const tabAll = document.getElementById('tab-all-courses');
+    if (tabAll) {
+      tabAll.addEventListener('click', () => {
+        this.activeTab = 'all';
+        window.router?.navigate('courses');
+      });
+    }
+
+    const tabMy = document.getElementById('tab-my-courses');
+    if (tabMy) {
+      tabMy.addEventListener('click', () => {
+        this.activeTab = 'my-courses';
+        window.router?.navigate('courses');
+      });
+    }
+
     // Create course button
     const createBtn = document.getElementById('create-course-btn');
     if (createBtn) {
@@ -381,7 +554,17 @@ export const CoursesView = {
       backBtn.addEventListener('click', () => {
         this.selectedCourse = null;
         this.selectedLesson = null;
+        this.courseEnrollment = null;
+        this.completedLessons = [];
         window.router?.navigate('courses');
+      });
+    }
+
+    // Enroll from classroom header
+    const enrollHeaderBtn = document.getElementById('enroll-course-header-btn');
+    if (enrollHeaderBtn) {
+      enrollHeaderBtn.addEventListener('click', () => {
+        this.enrollInCourse(this.selectedCourse.id);
       });
     }
 
@@ -391,10 +574,37 @@ export const CoursesView = {
       addModBtn.addEventListener('click', () => this.showModuleModal(this.selectedCourse.id));
     }
 
+    // View enrolled students button (Admin)
+    const viewStudentsBtn = document.getElementById('view-students-btn');
+    if (viewStudentsBtn) {
+      viewStudentsBtn.addEventListener('click', () => this.showEnrolledStudentsModal(this.selectedCourse.id));
+    }
+
     // Edit course details button
     const editCourseBtn = document.getElementById('edit-course-btn');
     if (editCourseBtn) {
       editCourseBtn.addEventListener('click', () => this.showCourseModal(this.selectedCourse));
+    }
+
+    // Toggle Lesson Progress Button
+    const toggleProgBtn = document.getElementById('toggle-lesson-progress-btn');
+    if (toggleProgBtn && this.selectedLesson) {
+      toggleProgBtn.addEventListener('click', () => {
+        const isCompleted = this.completedLessons.includes(this.selectedLesson.id);
+        this.toggleLessonProgress(this.selectedLesson.id, !isCompleted);
+      });
+    }
+
+    // Next Lesson Button
+    const nextLessonBtn = document.getElementById('next-lesson-btn');
+    if (nextLessonBtn && this.selectedLesson) {
+      nextLessonBtn.addEventListener('click', () => {
+        const next = this.getNextLesson(this.selectedLesson.id);
+        if (next) {
+          this.selectedLesson = next;
+          window.router?.navigate('courses');
+        }
+      });
     }
 
     // Classroom sidebar delegated clicks
@@ -465,12 +675,32 @@ export const CoursesView = {
     const grid = document.getElementById('courses-grid');
     if (!grid) return;
 
-    if (!this.courses || this.courses.length === 0) {
+    let coursesToDisplay = this.courses;
+
+    // Filter by activeTab
+    if (this.activeTab === 'my-courses') {
+      const enrolledCourseIDs = this.myEnrollments.map(e => e.courseId);
+      coursesToDisplay = this.courses.filter(c => enrolledCourseIDs.includes(c.id));
+    }
+
+    // Filter by search locally if needed
+    if (this.search.trim()) {
+      const q = this.search.toLowerCase().trim();
+      coursesToDisplay = coursesToDisplay.filter(c => 
+        c.title.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q) ||
+        (c.description && c.description.toLowerCase().includes(q))
+      );
+    }
+
+    if (!coursesToDisplay || coursesToDisplay.length === 0) {
       grid.innerHTML = `
         <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-3xl border border-slate-200">
           <i data-lucide="book-x" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
           <h4 class="text-sm font-bold text-slate-700">No se encontraron cursos</h4>
-          <p class="text-xs text-slate-400 mt-1">Ajusta los filtros o crea un nuevo programa formativo.</p>
+          <p class="text-xs text-slate-400 mt-1">
+            ${this.activeTab === 'my-courses' ? 'Aún no te has matriculado en ningún curso.' : 'Ajusta los filtros de búsqueda o categoría.'}
+          </p>
         </div>
       `;
       if (window.lucide) window.lucide.createIcons();
@@ -480,7 +710,12 @@ export const CoursesView = {
     const user = window.router?.currentUser;
     const isAdmin = user && ['SUPERADMIN', 'ADMINISTRADOR'].includes(user.role);
 
-    grid.innerHTML = this.courses.map(c => {
+    grid.innerHTML = coursesToDisplay.map(c => {
+      const enr = this.myEnrollments.find(e => e.courseId === c.id);
+      const isEnrolled = !!enr;
+      const progressPercent = enr ? Math.round(enr.progressPercent) : 0;
+      const isCompleted = enr && enr.status === 'completed';
+
       const statusBadge = {
         published: '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Publicado</span>',
         draft: '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">Borrador</span>',
@@ -502,6 +737,11 @@ export const CoursesView = {
                 ${c.category}
               </span>
               ${isAdmin ? statusBadge : ''}
+              ${isEnrolled ? `
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isCompleted ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white'} shadow-xs">
+                  ${isCompleted ? '✓ Completado' : `${progressPercent}% avance`}
+                </span>
+              ` : ''}
             </div>
 
             <div class="absolute bottom-3 left-3 right-3 flex items-center justify-between text-white text-[11px] font-semibold">
@@ -532,6 +772,19 @@ export const CoursesView = {
               </p>
             </div>
 
+            <!-- Enrollment Progress Bar if enrolled -->
+            ${isEnrolled ? `
+              <div class="space-y-1">
+                <div class="flex justify-between text-[11px] font-semibold">
+                  <span class="text-slate-400">Progreso del curso:</span>
+                  <span class="${isCompleted ? 'text-emerald-600 font-bold' : 'text-indigo-600 font-bold'}">${progressPercent}%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                  <div class="${isCompleted ? 'bg-emerald-500' : 'bg-indigo-600'} h-1.5 rounded-full transition-all" style="width: ${progressPercent}%"></div>
+                </div>
+              </div>
+            ` : ''}
+
             <!-- Footer Stats & Actions -->
             <div class="pt-3 border-t border-slate-100 flex items-center justify-between">
               <div class="flex items-center gap-3 text-xs text-slate-400 font-semibold">
@@ -540,13 +793,20 @@ export const CoursesView = {
               </div>
 
               <div class="flex items-center gap-1.5">
-                <button data-open-course="${c.id}" class="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs cursor-pointer">
-                  <span>${isAdmin ? 'Gestionar' : 'Explorar'}</span>
-                  <i data-lucide="arrow-right" class="w-3 h-3"></i>
-                </button>
+                ${isEnrolled ? `
+                  <button data-open-course="${c.id}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs cursor-pointer">
+                    <span>Continuar</span>
+                    <i data-lucide="play" class="w-3 h-3"></i>
+                  </button>
+                ` : `
+                  <button data-open-course="${c.id}" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer">
+                    <span>${isAdmin ? 'Gestionar' : 'Explorar'}</span>
+                    <i data-lucide="arrow-right" class="w-3 h-3"></i>
+                  </button>
+                `}
 
                 ${isAdmin ? `
-                  <button data-course-menu="${c.id}" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer" title="Opciones">
+                  <button data-course-menu="${c.id}" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer" title="Opciones Administrativas">
                     <i data-lucide="more-vertical" class="w-4 h-4"></i>
                   </button>
                 ` : ''}
@@ -579,8 +839,30 @@ export const CoursesView = {
       if (!res.ok) throw new Error('No se pudo acceder al curso');
 
       this.selectedCourse = await res.json();
-      // Auto-select first lesson if available
-      this.selectedLesson = this.selectedCourse.modules?.[0]?.lessons?.[0] || null;
+
+      // If user is logged in, fetch enrollment status & progress
+      const user = window.router?.currentUser;
+      if (user) {
+        try {
+          const resProg = await fetch(`/api/enrollments/courses/${courseId}/progress`);
+          if (resProg.ok) {
+            const dataProg = await resProg.json();
+            this.courseEnrollment = dataProg.enrollment;
+            this.completedLessons = dataProg.completedLessons || [];
+          }
+        } catch {
+          this.courseEnrollment = null;
+          this.completedLessons = [];
+        }
+      }
+
+      // Resume from last accessed lesson or select first
+      if (this.courseEnrollment?.lastLessonId) {
+        this.selectLessonById(this.courseEnrollment.lastLessonId, false);
+      }
+      if (!this.selectedLesson) {
+        this.selectedLesson = this.selectedCourse.modules?.[0]?.lessons?.[0] || null;
+      }
 
       window.router?.navigate('courses');
     } catch (e) {
@@ -588,16 +870,81 @@ export const CoursesView = {
     }
   },
 
-  selectLessonById(lessonId) {
+  selectLessonById(lessonId, shouldNavigate = true) {
     if (!this.selectedCourse) return;
     for (const mod of this.selectedCourse.modules || []) {
       for (const lsn of mod.lessons || []) {
         if (lsn.id === lessonId) {
           this.selectedLesson = lsn;
-          window.router?.navigate('courses');
+          if (shouldNavigate) {
+            window.router?.navigate('courses');
+          }
           return;
         }
       }
+    }
+  },
+
+  async enrollInCourse(courseId) {
+    const user = window.router?.currentUser;
+    if (!user) {
+      Toast.info('Inicia sesión para matricularte en este curso.');
+      window.router?.navigate('login');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/enrollments/courses/${courseId}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      Toast.success('¡Te has matriculado con éxito en el curso!');
+      await this.fetchEnrollmentsAndStats();
+      await this.openCourse(courseId);
+    } catch (e) {
+      Toast.error(e.message);
+    }
+  },
+
+  async toggleLessonProgress(lessonId, completed) {
+    const user = window.router?.currentUser;
+    if (!user) {
+      Toast.info('Inicia sesión para registrar tu avance académico.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/enrollments/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseId: this.selectedCourse.id,
+          lessonId,
+          completed,
+        }),
+      });
+
+      const updatedEnr = await res.json();
+      if (!res.ok) throw new Error(updatedEnr.error);
+
+      this.courseEnrollment = updatedEnr;
+      if (completed) {
+        if (!this.completedLessons.includes(lessonId)) {
+          this.completedLessons.push(lessonId);
+        }
+        Toast.success('¡Lección completada!');
+        if (updatedEnr.status === 'completed') {
+          Toast.success('🎉 ¡Felicidades! Has completado el 100% del programa.');
+        }
+      } else {
+        this.completedLessons = this.completedLessons.filter(id => id !== lessonId);
+        Toast.info('Progreso actualizado');
+      }
+
+      await this.fetchEnrollmentsAndStats();
+      window.router?.navigate('courses');
+    } catch (e) {
+      Toast.error(e.message);
     }
   },
 
@@ -606,6 +953,70 @@ export const CoursesView = {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
     const match = url.match(regExp);
     return (match && match[2].length === 11) ? match[2] : null;
+  },
+
+  showEnrolledStudentsModal(courseId) {
+    Modal.show({
+      title: 'Estudiantes Matriculados',
+      confirmText: 'Cerrar',
+      showCancel: false,
+      content: `
+        <div class="space-y-4 text-left text-xs">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span class="font-bold text-slate-800">Alumnos inscritos en el programa</span>
+            <span id="students-modal-count" class="text-slate-400 font-semibold">Cargando...</span>
+          </div>
+
+          <div id="students-modal-list" class="max-h-60 overflow-y-auto space-y-2">
+            <div class="py-6 text-center text-slate-400">Cargando directorio de estudiantes...</div>
+          </div>
+        </div>
+      `,
+      onConfirm: () => {}
+    });
+
+    // Fetch students list
+    setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/enrollments/admin/course/${courseId}/students`);
+        const list = await res.json();
+        const container = document.getElementById('students-modal-list');
+        const countSpan = document.getElementById('students-modal-count');
+
+        if (!container) return;
+
+        if (countSpan) countSpan.textContent = `${list.length} alumnos`;
+
+        if (!list || list.length === 0) {
+          container.innerHTML = `<p class="py-6 text-center text-slate-400 italic">No hay estudiantes matriculados aún.</p>`;
+          return;
+        }
+
+        container.innerHTML = list.map(e => `
+          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">
+                ${(e.studentName || 'U').charAt(0)}
+              </div>
+              <div>
+                <p class="font-bold text-slate-800">${e.studentName}</p>
+                <p class="text-[11px] text-slate-400">${e.studentEmail}</p>
+              </div>
+            </div>
+
+            <div class="text-right">
+              <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${e.status === 'completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800'}">
+                ${Math.round(e.progressPercent)}% avance
+              </span>
+              <p class="text-[10px] text-slate-400 mt-0.5">Inscrito: ${new Date(e.enrolledAt).toLocaleDateString()}</p>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        const container = document.getElementById('students-modal-list');
+        if (container) container.innerHTML = `<p class="text-rose-500 py-4 text-center">${err.message}</p>`;
+      }
+    }, 50);
   },
 
   showCourseActionMenu(courseId) {
@@ -620,12 +1031,16 @@ export const CoursesView = {
         <div class="space-y-2 text-left text-xs">
           <p class="font-bold text-slate-800 text-sm mb-3">${course.title}</p>
           
+          <button id="modal-action-students" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 flex items-center gap-2.5 text-slate-700 font-semibold transition-colors cursor-pointer">
+            <i data-lucide="users" class="w-4 h-4 text-indigo-600"></i> Ver Estudiantes Matriculados
+          </button>
+
           <button id="modal-action-edit" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 flex items-center gap-2.5 text-slate-700 font-semibold transition-colors cursor-pointer">
-            <i data-lucide="edit" class="w-4 h-4 text-indigo-600"></i> Editar Información Básica
+            <i data-lucide="edit" class="w-4 h-4 text-blue-600"></i> Editar Información Básica
           </button>
 
           <button id="modal-action-duplicate" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 flex items-center gap-2.5 text-slate-700 font-semibold transition-colors cursor-pointer">
-            <i data-lucide="copy" class="w-4 h-4 text-blue-600"></i> Duplicar Curso Completo
+            <i data-lucide="copy" class="w-4 h-4 text-purple-600"></i> Duplicar Curso Completo
           </button>
 
           ${course.status === 'published' ? `
@@ -648,6 +1063,10 @@ export const CoursesView = {
 
     // Bind action buttons inside modal
     setTimeout(() => {
+      document.getElementById('modal-action-students')?.addEventListener('click', () => {
+        Modal.close();
+        this.showEnrolledStudentsModal(course.id);
+      });
       document.getElementById('modal-action-edit')?.addEventListener('click', () => {
         Modal.close();
         this.showCourseModal(course);
