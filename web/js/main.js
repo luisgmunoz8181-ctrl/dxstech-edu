@@ -113,8 +113,10 @@ class AppRouter {
       const res = await fetch('/api/auth/me');
       if (res.ok) {
         const data = await res.json();
-        if (data.authenticated && data.user) {
+        if (data && data.authenticated && data.user) {
           this.currentUser = data.user;
+        } else if (data && data.id) {
+          this.currentUser = data;
         } else {
           this.currentUser = null;
         }

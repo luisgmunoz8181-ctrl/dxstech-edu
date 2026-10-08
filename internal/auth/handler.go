@@ -84,7 +84,10 @@ func (h *Handler) HandleGetMe(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, gin.H{
+		"authenticated": true,
+		"user":          user,
+	})
 }
 
 func (h *Handler) HandleChangePassword(c *gin.Context) {
