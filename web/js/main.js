@@ -1,6 +1,7 @@
 import { LoginView } from './views/login.js';
 import { ProfileView } from './views/profile.js';
 import { UsersView } from './views/users.js';
+import { CoursesView } from './views/courses.js';
 import { CertificatesView } from './views/certificates.js';
 import { QuizzesView } from './views/quizzes.js';
 import { WhatsAppView } from './views/whatsapp.js';
@@ -14,6 +15,7 @@ class AppRouter {
       login: LoginView,
       profile: ProfileView,
       users: UsersView,
+      courses: CoursesView,
       certificates: CertificatesView,
       quizzes: QuizzesView,
       whatsapp: WhatsAppView,
@@ -24,6 +26,7 @@ class AppRouter {
       login: { title: 'Iniciar Sesión', subtitle: 'Acceso a la plataforma LMS DxSTech Edu' },
       profile: { title: 'Mi Perfil & Seguridad', subtitle: 'Datos de la cuenta y actualización de contraseña' },
       users: { title: 'Gestión de Usuarios', subtitle: 'Administración de roles RBAC y accesos institucionales' },
+      courses: { title: 'Cursos & Contenidos', subtitle: 'Catálogo educativo, módulos interactivos y aula virtual' },
       certificates: { title: 'Certificados', subtitle: 'Generación masiva y diseño interactivo en alta fidelidad' },
       quizzes: { title: 'Evaluaciones IA', subtitle: 'Generador inteligente con Gemini y simulador de exámenes' },
       whatsapp: { title: 'WhatsApp + Chatbot IA', subtitle: 'Gateway automatizado con base de conocimiento estricta' },
@@ -44,13 +47,13 @@ class AppRouter {
     // Check current session from HttpOnly cookie
     await this.checkSession();
 
-    // Default to Users (if admin), Certificates (if student/public) or hash
-    const initialHash = window.location.hash.replace('#', '') || (this.currentUser ? (this.currentUser.role === 'ESTUDIANTE' ? 'certificates' : 'users') : 'login');
+    // Default to Courses catalog
+    const initialHash = window.location.hash.replace('#', '') || 'courses';
     if (initialHash.startsWith('verify')) {
       const id = initialHash.replace('verify/', '').replace('verify', '').trim();
       this.renderVerificationScreen(id);
     } else {
-      this.navigate(this.views[initialHash] ? initialHash : 'login');
+      this.navigate(this.views[initialHash] ? initialHash : 'courses');
     }
 
     window.addEventListener('hashchange', () => {

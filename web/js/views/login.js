@@ -240,12 +240,9 @@ export const LoginView = {
             window.router.currentUser = data.user;
             window.router.updateSessionUI();
             
-            // Navigate according to role
-            if (data.user.role === 'ESTUDIANTE') {
-              window.location.hash = 'certificates';
-            } else {
-              window.location.hash = 'users';
-            }
+            // Navigate to courses
+            window.location.hash = 'courses';
+            window.router.navigate('courses');
           }
         } catch (err) {
           Toast.error(err.message);

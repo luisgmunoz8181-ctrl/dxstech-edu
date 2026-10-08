@@ -92,6 +92,11 @@
 
     <!-- Navigation Links -->
     <nav id="sidebar-nav" class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+      <button data-nav="courses" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+        <i data-lucide="book-open" class="w-5 h-5 text-slate-400 transition-colors"></i>
+        <span>Cursos & Aulas</span>
+      </button>
+
       <button data-nav="users" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
         <i data-lucide="users" class="w-5 h-5 text-slate-400 transition-colors"></i>
         <span>Usuarios & Roles</span>
@@ -134,6 +139,10 @@
 
   <!-- Mobile Floating iOS-style Bottom Bar -->
   <nav class="md:hidden fixed bottom-4 inset-x-4 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 z-40 px-3 py-2 flex items-center justify-around">
+    <button data-nav="courses" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
+      <i data-lucide="book-open" class="w-4 h-4"></i>
+      <span class="text-[9px] font-medium">Cursos</span>
+    </button>
     <button data-nav="certificates" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
       <i data-lucide="award" class="w-4 h-4"></i>
       <span class="text-[9px] font-medium">Certificados</span>
@@ -141,10 +150,6 @@
     <button data-nav="quizzes" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
       <i data-lucide="sparkles" class="w-4 h-4"></i>
       <span class="text-[9px] font-medium">Quizzes</span>
-    </button>
-    <button data-nav="whatsapp" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
-      <i data-lucide="message-square" class="w-4 h-4"></i>
-      <span class="text-[9px] font-medium">WhatsApp</span>
     </button>
     <button data-nav="users" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
       <i data-lucide="users" class="w-4 h-4"></i>

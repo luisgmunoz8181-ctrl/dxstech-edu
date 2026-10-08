@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/certificates"
 	"dxstech-edu/internal/config"
+	"dxstech-edu/internal/courses"
 	"dxstech-edu/internal/database"
 	"dxstech-edu/internal/quizzes"
 	"dxstech-edu/internal/whatsapp"
@@ -44,6 +46,8 @@ func main() {
 	// Initialize Feature Services
 	authService := auth.NewService(db, cfg)
 	authHandler := auth.NewHandler(authService, !cfg.IsDevelopment())
+	courseService := courses.NewService(db, cfg.DataDir)
+	courseHandler := courses.NewHandler(courseService)
 	certService := certificates.NewService(db)
 	quizService := quizzes.NewService(db, geminiClient)
 	waService := whatsapp.NewService(db, geminiClient, cfg)
@@ -72,12 +76,16 @@ func main() {
 		})
 
 		authHandler.RegisterRoutes(api.Group("/auth"))
+		courseHandler.RegisterRoutes(api.Group("/courses"))
 		certService.RegisterRoutes(api.Group("/certificates"))
 		quizService.RegisterRoutes(api.Group("/quizzes"))
 		waService.RegisterRoutes(api.Group("/whatsapp"))
 	}
 
-	// Serve Frontend Static SPA
+	// Serve Frontend Static SPA & Uploads
+	uploadsDir := filepath.Join(cfg.DataDir, "uploads")
+	_ = os.MkdirAll(uploadsDir, 0755)
+	r.Static("/uploads", uploadsDir)
 	r.Static("/js", "./web/js")
 	r.StaticFile("/favicon.ico", "./web/favicon.ico")
 
