@@ -55,7 +55,7 @@ EXPOSE 3000
 
 # Healthcheck endpoint
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-    CMD wget -qO- http://127.0.0.1:3000/api/health || exit 1
+    CMD wget -qO- http://127.0.0.1:${PORT:-3000}/api/health || exit 1
 
 # Execute server
 CMD ["/app/dxstech-server"]
