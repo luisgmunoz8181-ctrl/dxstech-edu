@@ -1061,6 +1061,7 @@ export const CertificatesView = {
           Toast.info(`Enlace: ${fullUrl}`);
         });
       });
+    });
   },
 
   exportIssuedToCSV() {

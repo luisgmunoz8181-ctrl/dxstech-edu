@@ -719,6 +719,8 @@ Certificados: Al aprobar con 60% o más, se emite un certificado digital en PDF 
         }
       }
     });
+  },
+
   processRecipientsExcelFile(file) {
     if (!window.XLSX) {
       Toast.error('Biblioteca SheetJS no cargada en el navegador.');

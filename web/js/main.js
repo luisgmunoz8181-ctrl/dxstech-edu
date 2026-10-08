@@ -317,8 +317,14 @@ class AppRouter {
   }
 }
 
-// Initialize on DOM Ready
-document.addEventListener('DOMContentLoaded', () => {
+// Initialize App
+function startApp() {
   const app = new AppRouter();
   app.init();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
