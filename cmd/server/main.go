@@ -49,9 +49,9 @@ func main() {
 	authHandler := auth.NewHandler(authService, !cfg.IsDevelopment())
 	courseService := courses.NewService(db, cfg.DataDir)
 	courseHandler := courses.NewHandler(courseService)
-	enrollService := enrollments.NewService(db)
-	enrollHandler := enrollments.NewHandler(enrollService)
 	certService := certificates.NewService(db)
+	enrollService := enrollments.NewService(db, certService)
+	enrollHandler := enrollments.NewHandler(enrollService)
 	quizService := quizzes.NewService(db, geminiClient)
 	waService := whatsapp.NewService(db, geminiClient, cfg)
 
@@ -64,6 +64,16 @@ func main() {
 
 	// Set max multipart memory (25 MB)
 	r.MaxMultipartMemory = 25 << 20
+
+	// Rutas amigables de verificación pública de certificados
+	r.GET("/verify/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		c.Redirect(http.StatusFound, "/#verify/"+id)
+	})
+	r.GET("/validar/:id", func(c *gin.Context) {
+		id := c.Param("id")
+		c.Redirect(http.StatusFound, "/#verify/"+id)
+	})
 
 	// API Routes Group
 	api := r.Group("/api")

@@ -361,30 +361,42 @@ class AppRouter {
               <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 text-left space-y-2 text-xs">
                 <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                   <span class="text-slate-400 font-medium">Código de Registro:</span>
-                  <span class="font-mono font-bold text-slate-800">${c.id}</span>
+                  <span class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">${c.id}</span>
                 </div>
                 <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                   <span class="text-slate-400 font-medium">Fecha de Emisión:</span>
                   <span class="font-semibold text-slate-700">${c.issueDate}</span>
                 </div>
+                ${c.durationHours ? `
+                  <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
+                    <span class="text-slate-400 font-medium">Intensidad Académica:</span>
+                    <span class="font-semibold text-slate-700">${c.durationHours} Horas</span>
+                  </div>
+                ` : ''}
+                ${c.instructorName ? `
+                  <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
+                    <span class="text-slate-400 font-medium">Docente / Director:</span>
+                    <span class="font-semibold text-slate-700">${c.instructorName}</span>
+                  </div>
+                ` : ''}
                 <div class="flex justify-between items-center py-1">
                   <span class="text-slate-400 font-medium">Institución Emisora:</span>
-                  <span class="font-semibold text-indigo-600">DxSTech Edu Academy</span>
+                  <span class="font-semibold text-indigo-600">DxSTech Edu — Academy of Technology & AI</span>
                 </div>
               </div>
 
               <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5">
+                <a href="/api/certificates/${c.id}/pdf" target="_blank" download="Certificado_${c.id}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
+                  <i data-lucide="download" class="w-4 h-4"></i>
+                  <span>Descargar Diploma Oficial (PDF)</span>
+                </a>
                 <button id="copy-verify-url-btn" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs">
                   <i data-lucide="copy" class="w-3.5 h-3.5 text-slate-500"></i>
                   <span>Copiar Enlace</span>
                 </button>
-                <button id="print-verify-btn" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs">
-                  <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-500"></i>
-                  <span>Imprimir</span>
-                </button>
-                <a href="#certificates" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
-                  <i data-lucide="award" class="w-4 h-4"></i>
-                  <span>Ir a Certificados</span>
+                <a href="#courses" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs">
+                  <i data-lucide="book-open" class="w-3.5 h-3.5 text-slate-500"></i>
+                  <span>Explorar Cursos</span>
                 </a>
               </div>
             </div>

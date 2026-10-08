@@ -120,8 +120,12 @@ func runMigrations(db *sql.DB) error {
 
 	CREATE TABLE IF NOT EXISTS issued_certificates (
 		id TEXT PRIMARY KEY,
+		user_id TEXT,
+		course_id TEXT,
 		student_name TEXT NOT NULL,
 		course_title TEXT NOT NULL,
+		duration_hours REAL NOT NULL DEFAULT 0.0,
+		instructor_name TEXT NOT NULL DEFAULT 'DxSTech Edu',
 		issue_date TEXT NOT NULL,
 		qr_code_url TEXT NOT NULL,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -212,6 +216,13 @@ func runMigrations(db *sql.DB) error {
 	if _, err := db.Exec(schema); err != nil {
 		return err
 	}
+
+	// Migración incremental segura para issued_certificates
+	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN user_id TEXT;")
+	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN course_id TEXT;")
+	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN duration_hours REAL DEFAULT 0.0;")
+	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN instructor_name TEXT DEFAULT 'DxSTech Edu';")
+	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_cert_user_course ON issued_certificates(user_id, course_id);")
 
 	if err := seedDefaultUsers(db); err != nil {
 		return err

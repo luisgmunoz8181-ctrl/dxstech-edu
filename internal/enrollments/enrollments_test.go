@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"dxstech-edu/internal/certificates"
 	"dxstech-edu/internal/database"
 	"dxstech-edu/internal/enrollments"
 )
@@ -34,7 +35,8 @@ func TestEnrollmentAndProgressFlow(t *testing.T) {
 	db, _, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	svc := enrollments.NewService(db)
+	certSvc := certificates.NewService(db)
+	svc := enrollments.NewService(db, certSvc)
 	ctx := context.Background()
 
 	// 1. Initial seeded enrollment check (usr-student-01 enrolled in crs-ai-101 with 20% progress)
@@ -104,5 +106,26 @@ func TestEnrollmentAndProgressFlow(t *testing.T) {
 	}
 	if len(adminStudents) != 1 || adminStudents[0].StudentEmail != "estudiante@dxstech.edu" {
 		t.Errorf("Unexpected course students list: %+v", adminStudents)
+	}
+
+	// 7. Verify Phase 4: Automatic Certificate Issuance on 100% completion
+	cert, err := certSvc.GetCertificateByUserAndCourse(ctx, studentID, courseID)
+	if err != nil || cert == nil {
+		t.Fatalf("Expected automatic certificate to be issued upon 100%% course completion: %v", err)
+	}
+	if cert.StudentName != "Carlos Estudiante" {
+		t.Errorf("Expected student name 'Carlos Estudiante', got '%s'", cert.StudentName)
+	}
+	if cert.CourseTitle == "" {
+		t.Errorf("Certificate missing course title")
+	}
+
+	// Verify Official PDF Generation
+	pdfBytes, err := certSvc.GenerateOfficialPDF(cert)
+	if err != nil {
+		t.Fatalf("Error generating official certificate PDF: %v", err)
+	}
+	if len(pdfBytes) < 1000 {
+		t.Errorf("Generated PDF seems too small (%d bytes)", len(pdfBytes))
 	}
 }

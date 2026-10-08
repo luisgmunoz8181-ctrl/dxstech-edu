@@ -5,17 +5,24 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"dxstech-edu/internal/certificates"
 	"dxstech-edu/internal/database"
 )
 
-type Service struct {
-	db *database.DB
+type CertificateIssuer interface {
+	IssueCourseCertificate(ctx context.Context, userID, courseID, studentName, courseTitle string, durationHours float64, instructorName, baseURL string) (*certificates.IssuedCertificate, error)
 }
 
-func NewService(db *database.DB) *Service {
-	return &Service{db: db}
+type Service struct {
+	db         *database.DB
+	certIssuer CertificateIssuer
+}
+
+func NewService(db *database.DB, certIssuer CertificateIssuer) *Service {
+	return &Service{db: db, certIssuer: certIssuer}
 }
 
 func (s *Service) EnrollStudent(ctx context.Context, userID, courseID string) (*Enrollment, error) {
@@ -196,6 +203,23 @@ func (s *Service) ToggleLessonProgress(ctx context.Context, userID, courseID, le
 	if progressPercent >= 100.0 {
 		status = "completed"
 		compAt = &now
+
+		if s.certIssuer != nil {
+			var firstName, lastName, courseTitle, instructorName string
+			var durationHours float64
+			_ = s.db.QueryRowContext(ctx, "SELECT first_name, last_name FROM users WHERE id = ?", userID).Scan(&firstName, &lastName)
+			_ = s.db.QueryRowContext(ctx, "SELECT title, duration_hours, instructor_name FROM courses WHERE id = ?", courseID).Scan(&courseTitle, &durationHours, &instructorName)
+
+			studentName := strings.TrimSpace(firstName + " " + lastName)
+			if studentName == "" {
+				studentName = "Estudiante DxSTech"
+			}
+			if instructorName == "" {
+				instructorName = "Dirección Académica DxSTech"
+			}
+
+			_, _ = s.certIssuer.IssueCourseCertificate(ctx, userID, courseID, studentName, courseTitle, durationHours, instructorName, "")
+		}
 	}
 
 	_, err = s.db.ExecContext(ctx, `

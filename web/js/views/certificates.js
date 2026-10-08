@@ -24,14 +24,116 @@ export const CertificatesView = {
     sampleName: 'CARLOS ANDRÉS MENDOZA',
     students: [],
     isDraggingOnCanvas: false,
+    activeTab: 'my-certs',
+    myCertificates: [],
   },
 
   // Event listener references for proper cleanup
   cleanupFns: [],
 
   render() {
+    const user = window.router?.currentUser;
+    const isAdmin = user && ['SUPERADMIN', 'ADMINISTRADOR'].includes(user.role);
+
     return `
       <div class="space-y-6 max-w-6xl mx-auto">
+        <!-- Top Toolbar / Tabs -->
+        <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl w-full sm:w-auto">
+            <button id="cert-tab-my" class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${this.state.activeTab === 'my-certs' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+              <i data-lucide="award" class="w-3.5 h-3.5 inline mr-1 text-amber-500"></i>
+              <span>Mis Certificados</span>
+            </button>
+            ${isAdmin ? `
+              <button id="cert-tab-gen" class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${this.state.activeTab === 'generator' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                <i data-lucide="layout-template" class="w-3.5 h-3.5 inline mr-1 text-indigo-600"></i>
+                <span>Generador Masivo</span>
+              </button>
+            ` : ''}
+            <button id="cert-tab-verify" class="flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${this.state.activeTab === 'verify' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 inline mr-1 text-emerald-600"></i>
+              <span>Validar Registro</span>
+            </button>
+          </div>
+          <div class="text-[11px] text-slate-400 font-medium">
+            <span>Acreditaciones oficiales emitidas por </span><strong class="text-indigo-600">DxSTech Edu</strong>
+          </div>
+        </div>
+
+        ${this.state.activeTab === 'my-certs' ? this.renderMyCertificatesTab() : (this.state.activeTab === 'generator' ? this.renderGeneratorTab() : this.renderVerifyTab())}
+      </div>
+    `;
+  },
+
+  renderMyCertificatesTab() {
+    return `
+      <div class="space-y-6">
+        <div class="bg-gradient-to-r from-amber-500 to-amber-700 rounded-3xl p-6 text-white shadow-lg shadow-amber-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div>
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white mb-2">
+              🎓 Acreditación Profesional Digital
+            </span>
+            <h3 class="text-lg font-bold">Mis Diplomas y Certificaciones Obtenidas</h3>
+            <p class="text-xs text-amber-100 mt-1 max-w-xl">
+              Aquí puedes consultar y descargar en formato PDF de alta fidelidad todos los certificados oficiales obtenidos tras culminar satisfactoriamente tus cursos en DxSTech Edu.
+            </p>
+          </div>
+          <a href="#courses" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-white text-amber-800 hover:bg-amber-50 transition-all shadow-xs flex items-center gap-1.5 shrink-0">
+            <i data-lucide="book-open" class="w-4 h-4 text-amber-600"></i>
+            <span>Ir a Mis Cursos</span>
+          </a>
+        </div>
+
+        <div id="my-certs-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div class="col-span-full py-16 text-center text-slate-400">
+            <div class="w-8 h-8 border-3 border-amber-600/30 border-t-amber-600 rounded-full animate-spin mx-auto mb-3"></div>
+            <p class="text-xs font-medium">Consultando tus certificaciones oficiales...</p>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  renderVerifyTab() {
+    return `
+      <div class="max-w-2xl mx-auto py-6 space-y-6">
+        <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm text-center space-y-6">
+          <div class="w-16 h-16 rounded-3xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto shadow-inner border border-emerald-100">
+            <i data-lucide="shield-check" class="w-8 h-8"></i>
+          </div>
+
+          <div>
+            <h3 class="text-xl font-bold text-slate-900">Validación Pública de Certificados</h3>
+            <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+              Ingresa el código único de registro (ejemplo: <code class="font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">DXS-2026-XXXX</code>) para verificar en tiempo real la autenticidad académica del documento.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2 max-w-md mx-auto">
+            <input type="text" id="verify-code-input" placeholder="DXS-2026-XXXX..." class="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-hidden text-center uppercase tracking-wider">
+            <button id="verify-code-btn" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="search" class="w-3.5 h-3.5"></i>
+              <span>Validar</span>
+            </button>
+          </div>
+
+          <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 text-left text-xs text-slate-600 space-y-2">
+            <p class="font-semibold text-slate-800 flex items-center gap-1.5">
+              <i data-lucide="info" class="w-4 h-4 text-emerald-600"></i>
+              Sobre la Verificación Oficial:
+            </p>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              Cada certificado emitido por DxSTech Edu cuenta con una firma digital determinística y un código QR único indeleble. El sistema contrasta el registro directamente con la base de datos oficial para certificar estudiante, curso, intensidad horaria e instructor.
+            </p>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  renderGeneratorTab() {
+    return `
+      <div class="space-y-6">
         <!-- Top Banner / Description -->
         <div class="bg-gradient-to-r from-indigo-600 to-indigo-800 rounded-2xl p-6 text-white shadow-lg shadow-indigo-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
@@ -289,12 +391,150 @@ export const CertificatesView = {
   },
 
   mount() {
-    this.bindEvents();
-    this.updateStudentCount();
-    if (this.state.templateDataUrl) {
-      this.drawCanvas();
+    this.bindTabEvents();
+    if (this.state.activeTab === 'my-certs') {
+      this.loadMyCertificates();
+    } else if (this.state.activeTab === 'generator') {
+      this.bindEvents();
+      this.updateStudentCount();
+      if (this.state.templateDataUrl) {
+        this.drawCanvas();
+      }
+      this.loadIssuedCertificates();
+    } else if (this.state.activeTab === 'verify') {
+      this.bindVerifyEvents();
     }
-    this.loadIssuedCertificates();
+  },
+
+  bindTabEvents() {
+    document.getElementById('cert-tab-my')?.addEventListener('click', () => {
+      this.state.activeTab = 'my-certs';
+      window.router?.navigate('certificates');
+    });
+    document.getElementById('cert-tab-gen')?.addEventListener('click', () => {
+      this.state.activeTab = 'generator';
+      window.router?.navigate('certificates');
+    });
+    document.getElementById('cert-tab-verify')?.addEventListener('click', () => {
+      this.state.activeTab = 'verify';
+      window.router?.navigate('certificates');
+    });
+  },
+
+  bindVerifyEvents() {
+    const input = document.getElementById('verify-code-input');
+    const btn = document.getElementById('verify-code-btn');
+    if (btn && input) {
+      btn.addEventListener('click', () => {
+        const code = input.value.trim();
+        if (!code) {
+          Toast.warning('Ingresa un código de certificado para validar.');
+          return;
+        }
+        window.router?.renderVerificationScreen(code);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          btn.click();
+        }
+      });
+    }
+  },
+
+  async loadMyCertificates() {
+    const container = document.getElementById('my-certs-container');
+    if (!container) return;
+    try {
+      const res = await fetch('/api/certificates/my-certificates');
+      if (!res.ok) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-400 bg-white rounded-3xl border border-slate-200">
+            <i data-lucide="lock" class="w-10 h-10 mx-auto mb-2 text-slate-300"></i>
+            <h4 class="text-sm font-bold text-slate-700">Inicia sesión</h4>
+            <p class="text-xs text-slate-400 mt-1">Debes iniciar sesión para consultar tus certificados oficiales emitidos.</p>
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      const certs = await res.json();
+      this.state.myCertificates = certs || [];
+
+      if (!certs || certs.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-3xl border border-slate-200">
+            <div class="w-16 h-16 rounded-3xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-3 shadow-inner border border-amber-100">
+              <i data-lucide="award" class="w-8 h-8"></i>
+            </div>
+            <h4 class="text-base font-bold text-slate-800">Aún no tienes certificados expedidos</h4>
+            <p class="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+              Completa el 100% de las lecciones de cualquiera de nuestros cursos en el catálogo para que tu certificado oficial se genere de forma inmediata y automática con código QR.
+            </p>
+            <div class="mt-4">
+              <a href="#courses" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs">
+                <i data-lucide="book-open" class="w-4 h-4"></i>
+                <span>Explorar Cursos Disponibles</span>
+              </a>
+            </div>
+          </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = certs.map(c => `
+        <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-lg transition-all p-6 flex flex-col justify-between group">
+          <div class="space-y-4">
+            <div class="flex items-start justify-between gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-200">
+                <i data-lucide="award" class="w-6 h-6"></i>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Oficial Verificado
+              </span>
+            </div>
+
+            <div>
+              <span class="text-[11px] font-mono font-bold text-slate-400">${c.id}</span>
+              <h4 class="text-base font-bold text-slate-900 leading-snug mt-1 group-hover:text-indigo-600 transition-colors">
+                ${c.courseTitle}
+              </h4>
+              <p class="text-xs text-slate-500 mt-1">Acreditado a: <strong class="text-slate-700 font-semibold">${c.studentName}</strong></p>
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-3 border border-slate-200/60 text-[11px] space-y-1.5 text-slate-600">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Intensidad:</span>
+                <span class="font-semibold text-slate-800">${c.durationHours || 10} Horas</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Fecha de Emisión:</span>
+                <span class="font-semibold text-slate-800">${c.issueDate}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Docente / Director:</span>
+                <span class="font-semibold text-indigo-600">${c.instructorName || 'DxSTech Edu'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 mt-4">
+            <a href="/api/certificates/${c.id}/pdf" target="_blank" download="Certificado_${c.id}.pdf" class="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i>
+              <span>Descargar PDF</span>
+            </a>
+            <a href="#verify/${c.id}" class="px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer" title="Verificar autenticidad">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+            </a>
+          </div>
+        </div>
+      `).join('');
+
+      if (window.lucide) window.lucide.createIcons();
+    } catch (e) {
+      container.innerHTML = `<div class="p-6 text-xs text-rose-600 bg-rose-50 rounded-2xl col-span-full">Error cargando certificados: ${e.message}</div>`;
+    }
   },
 
   bindEvents() {

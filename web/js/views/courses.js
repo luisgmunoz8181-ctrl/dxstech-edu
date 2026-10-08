@@ -187,7 +187,7 @@ export const CoursesView = {
           </div>
 
           <div class="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-            <!-- Progress Bar / Enroll Button -->
+            <!-- Progress Bar / Enroll Button / Certificate Button -->
             ${user ? (enr ? `
               <div class="flex items-center gap-2.5">
                 <div class="w-28 sm:w-40 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
@@ -195,6 +195,12 @@ export const CoursesView = {
                 </div>
                 <span class="text-xs font-bold text-slate-700 font-mono">${progressPercent}%</span>
               </div>
+              ${(isCompleted || progressPercent >= 100) ? `
+                <button id="view-cert-btn" class="px-3.5 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 transition-all shadow-md shadow-amber-200 flex items-center gap-1.5 cursor-pointer animate-pulse" title="Ver y descargar certificado">
+                  <i data-lucide="award" class="w-4 h-4 text-white"></i>
+                  <span>🎓 Certificado</span>
+                </button>
+              ` : ''}
             ` : `
               <button id="enroll-course-header-btn" class="px-4 py-2 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
@@ -560,6 +566,14 @@ export const CoursesView = {
       });
     }
 
+    // View Certificate button from classroom header
+    const viewCertBtn = document.getElementById('view-cert-btn');
+    if (viewCertBtn && this.selectedCourse) {
+      viewCertBtn.addEventListener('click', () => {
+        this.openCertificateModal(this.selectedCourse.id);
+      });
+    }
+
     // Enroll from classroom header
     const enrollHeaderBtn = document.getElementById('enroll-course-header-btn');
     if (enrollHeaderBtn) {
@@ -793,6 +807,11 @@ export const CoursesView = {
               </div>
 
               <div class="flex items-center gap-1.5">
+                ${isEnrolled && isCompleted ? `
+                  <button data-course-cert="${c.id}" class="p-2 rounded-xl text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center justify-center shadow-2xs cursor-pointer" title="Descargar Certificado Oficial">
+                    <i data-lucide="award" class="w-4 h-4"></i>
+                  </button>
+                ` : ''}
                 ${isEnrolled ? `
                   <button data-open-course="${c.id}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs cursor-pointer">
                     <span>Continuar</span>
@@ -818,6 +837,13 @@ export const CoursesView = {
     }).join('');
 
     // Bind card buttons
+    grid.querySelectorAll('[data-course-cert]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.openCertificateModal(btn.dataset.courseCert);
+      });
+    });
+
     grid.querySelectorAll('[data-open-course]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.openCourse(btn.dataset.openCourse);
@@ -933,8 +959,11 @@ export const CoursesView = {
           this.completedLessons.push(lessonId);
         }
         Toast.success('¡Lección completada!');
-        if (updatedEnr.status === 'completed') {
+        if (updatedEnr.status === 'completed' || updatedEnr.progressPercent >= 100) {
           Toast.success('🎉 ¡Felicidades! Has completado el 100% del programa.');
+          setTimeout(() => {
+            this.openCertificateModal(this.selectedCourse.id);
+          }, 600);
         }
       } else {
         this.completedLessons = this.completedLessons.filter(id => id !== lessonId);
@@ -945,6 +974,89 @@ export const CoursesView = {
       window.router?.navigate('courses');
     } catch (e) {
       Toast.error(e.message);
+    }
+  },
+
+  async openCertificateModal(courseId) {
+    Loading.show('Consultando certificado oficial...');
+    try {
+      const res = await fetch(`/api/certificates/course/${courseId}`);
+      const cert = await res.json();
+      Loading.hide();
+
+      if (!res.ok) {
+        Toast.error(cert.error || 'Aún no tienes certificado para este curso.');
+        return;
+      }
+
+      const modalHtml = `
+        <div id="cert-modal-backdrop" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div class="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 border border-amber-200 shadow-2xl relative space-y-6 text-center animate-in fade-in zoom-in-95 duration-200">
+            <button id="close-cert-modal" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+
+            <div class="w-20 h-20 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-inner border border-amber-200">
+              <i data-lucide="award" class="w-10 h-10"></i>
+            </div>
+
+            <div>
+              <span class="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 mb-2">
+                🏆 ¡Felicitaciones! Certificación Oficial Obtenida
+              </span>
+              <h3 class="text-xl font-black text-slate-900">${cert.studentName}</h3>
+              <p class="text-xs text-slate-500 mt-1">ha completado y aprobado satisfactoriamente los requisitos académicos de:</p>
+              <p class="text-sm font-bold text-indigo-700 mt-1">« ${cert.courseTitle} »</p>
+            </div>
+
+            <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 text-left space-y-2 text-xs">
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
+                <span class="text-slate-500 font-medium">Código de Registro Único:</span>
+                <span class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">${cert.id}</span>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
+                <span class="text-slate-500 font-medium">Intensidad Académica:</span>
+                <span class="font-semibold text-slate-800">${cert.durationHours || 10} Horas</span>
+              </div>
+              <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
+                <span class="text-slate-500 font-medium">Fecha de Emisión:</span>
+                <span class="font-semibold text-slate-800">${cert.issueDate}</span>
+              </div>
+              <div class="flex justify-between items-center py-1">
+                <span class="text-slate-500 font-medium">Docente / Director:</span>
+                <span class="font-semibold text-indigo-600">${cert.instructorName || 'DxSTech Edu'}</span>
+              </div>
+            </div>
+
+            <div class="pt-2 flex flex-wrap items-center justify-center gap-3">
+              <a href="/api/certificates/${cert.id}/pdf" target="_blank" download="Certificado_${cert.id}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 cursor-pointer">
+                <i data-lucide="download" class="w-4 h-4"></i>
+                <span>Descargar Diploma Oficial (PDF)</span>
+              </a>
+              <a href="#verify/${cert.id}" id="go-verify-link" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
+                <span>Validar en Línea</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+      if (window.lucide) window.lucide.createIcons();
+
+      const modal = document.getElementById('cert-modal-backdrop');
+      document.getElementById('close-cert-modal')?.addEventListener('click', () => modal?.remove());
+      document.getElementById('go-verify-link')?.addEventListener('click', () => {
+        modal?.remove();
+        if (window.router) window.router.renderVerificationScreen(cert.id);
+      });
+      modal?.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+      });
+    } catch (err) {
+      Loading.hide();
+      Toast.error('Error cargando certificado: ' + err.message);
     }
   },
 
