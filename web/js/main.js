@@ -1,6 +1,7 @@
 import { LoginView } from './views/login.js';
 import { ProfileView } from './views/profile.js';
 import { UsersView } from './views/users.js';
+import { DashboardView } from './views/dashboard.js';
 import { CoursesView } from './views/courses.js';
 import { CertificatesView } from './views/certificates.js';
 import { QuizzesView } from './views/quizzes.js';
@@ -14,6 +15,7 @@ class AppRouter {
     this.views = {
       login: LoginView,
       profile: ProfileView,
+      dashboard: DashboardView,
       users: UsersView,
       courses: CoursesView,
       certificates: CertificatesView,
@@ -25,6 +27,7 @@ class AppRouter {
     this.viewTitles = {
       login: { title: 'Iniciar Sesión', subtitle: 'Acceso a la plataforma LMS DxSTech Edu' },
       profile: { title: 'Mi Perfil & Seguridad', subtitle: 'Datos de la cuenta y actualización de contraseña' },
+      dashboard: { title: 'Dashboard Administrativo', subtitle: 'Métricas institucionales, avance de cohortes y reportes LMS' },
       users: { title: 'Gestión de Usuarios', subtitle: 'Administración de roles RBAC y accesos institucionales' },
       courses: { title: 'Cursos & Contenidos', subtitle: 'Catálogo educativo, módulos interactivos y aula virtual' },
       certificates: { title: 'Certificados', subtitle: 'Generación masiva y diseño interactivo en alta fidelidad' },
@@ -162,12 +165,12 @@ class AppRouter {
 
       // RBAC nav button visibility
       const isAdmin = ['SUPERADMIN', 'ADMINISTRADOR'].includes(this.currentUser.role);
-      if (usersNavBtn) {
-        usersNavBtn.style.display = isAdmin ? 'flex' : 'none';
-      }
-      if (mobileUsersBtn) {
-        mobileUsersBtn.style.display = isAdmin ? 'flex' : 'none';
-      }
+      const dashNavBtn = document.querySelector('[data-nav="dashboard"]');
+      const mobileDashBtn = document.querySelector('.mobile-nav-btn[data-nav="dashboard"]');
+      if (dashNavBtn) dashNavBtn.style.display = isAdmin ? 'flex' : 'none';
+      if (mobileDashBtn) mobileDashBtn.style.display = isAdmin ? 'flex' : 'none';
+      if (usersNavBtn) usersNavBtn.style.display = isAdmin ? 'flex' : 'none';
+      if (mobileUsersBtn) mobileUsersBtn.style.display = isAdmin ? 'flex' : 'none';
     } else {
       if (userBtn) {
         userBtn.className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-all text-slate-700 shadow-2xs cursor-pointer';
@@ -183,6 +186,10 @@ class AppRouter {
         };
       }
 
+      const dashNavBtn = document.querySelector('[data-nav="dashboard"]');
+      const mobileDashBtn = document.querySelector('.mobile-nav-btn[data-nav="dashboard"]');
+      if (dashNavBtn) dashNavBtn.style.display = 'none';
+      if (mobileDashBtn) mobileDashBtn.style.display = 'none';
       if (usersNavBtn) usersNavBtn.style.display = 'none';
       if (mobileUsersBtn) mobileUsersBtn.style.display = 'none';
     }
@@ -196,15 +203,15 @@ class AppRouter {
     if (!this.views[viewId]) return;
 
     // RBAC Protection guards
-    if (viewId === 'users') {
+    if (viewId === 'dashboard' || viewId === 'users') {
       if (!this.currentUser) {
-        Toast.info('Inicia sesión con credenciales de administrador para gestionar usuarios.');
+        Toast.info('Inicia sesión con credenciales de administrador para acceder a este módulo.');
         this.navigate('login');
         return;
       }
       if (!['SUPERADMIN', 'ADMINISTRADOR'].includes(this.currentUser.role)) {
-        Toast.error('Acceso denegado: tu rol de Estudiante no tiene privilegios de gestión.');
-        this.navigate('certificates');
+        Toast.error('Acceso denegado: tu rol de Estudiante no tiene privilegios administrativos.');
+        this.navigate('courses');
         return;
       }
     }

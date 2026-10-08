@@ -240,9 +240,11 @@ export const LoginView = {
             window.router.currentUser = data.user;
             window.router.updateSessionUI();
             
-            // Navigate to courses
-            window.location.hash = 'courses';
-            window.router.navigate('courses');
+            // Navigate to dashboard if admin, or courses if student
+            const isAdmin = ['SUPERADMIN', 'ADMINISTRADOR'].includes(data.user.role);
+            const targetView = isAdmin ? 'dashboard' : 'courses';
+            window.location.hash = targetView;
+            window.router.navigate(targetView);
           }
         } catch (err) {
           Toast.error(err.message);

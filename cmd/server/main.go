@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/analytics"
 	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/certificates"
 	"dxstech-edu/internal/config"
@@ -54,6 +55,8 @@ func main() {
 	enrollHandler := enrollments.NewHandler(enrollService)
 	quizService := quizzes.NewService(db, geminiClient)
 	waService := whatsapp.NewService(db, geminiClient, cfg)
+	analyticsService := analytics.NewService(db)
+	analyticsHandler := analytics.NewHandler(analyticsService)
 
 	// Router setup
 	r := gin.New()
@@ -94,6 +97,7 @@ func main() {
 		certService.RegisterRoutes(api.Group("/certificates"))
 		quizService.RegisterRoutes(api.Group("/quizzes"))
 		waService.RegisterRoutes(api.Group("/whatsapp"))
+		analyticsHandler.RegisterRoutes(api.Group("/admin"))
 	}
 
 	// Serve Frontend Static SPA & Uploads
