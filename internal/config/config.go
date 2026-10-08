@@ -6,10 +6,12 @@ import (
 )
 
 type Config struct {
-	AppEnv  string
-	Port    string
-	Host    string
-	DataDir string
+	AppEnv    string
+	Port      string
+	Host      string
+	DataDir   string
+	JWTSecret string
+	AppURL    string
 }
 
 func Load() *Config {
@@ -33,11 +35,23 @@ func Load() *Config {
 		dataDir = "./data"
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if strings.TrimSpace(jwtSecret) == "" {
+		jwtSecret = "dxstech-edu-jwt-auth-secret-key-2026-production"
+	}
+
+	appURL := os.Getenv("APP_URL")
+	if strings.TrimSpace(appURL) == "" {
+		appURL = "http://localhost:" + port
+	}
+
 	return &Config{
-		AppEnv:  env,
-		Port:    port,
-		Host:    host,
-		DataDir: dataDir,
+		AppEnv:    env,
+		Port:      port,
+		Host:      host,
+		DataDir:   dataDir,
+		JWTSecret: jwtSecret,
+		AppURL:    appURL,
 	}
 }
 

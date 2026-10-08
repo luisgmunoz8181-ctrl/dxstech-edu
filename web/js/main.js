@@ -1,3 +1,6 @@
+import { LoginView } from './views/login.js';
+import { ProfileView } from './views/profile.js';
+import { UsersView } from './views/users.js';
 import { CertificatesView } from './views/certificates.js';
 import { QuizzesView } from './views/quizzes.js';
 import { WhatsAppView } from './views/whatsapp.js';
@@ -8,6 +11,9 @@ import { Toast } from './components/toast.js';
 class AppRouter {
   constructor() {
     this.views = {
+      login: LoginView,
+      profile: ProfileView,
+      users: UsersView,
       certificates: CertificatesView,
       quizzes: QuizzesView,
       whatsapp: WhatsAppView,
@@ -15,6 +21,9 @@ class AppRouter {
     };
 
     this.viewTitles = {
+      login: { title: 'Iniciar Sesión', subtitle: 'Acceso a la plataforma LMS DxSTech Edu' },
+      profile: { title: 'Mi Perfil & Seguridad', subtitle: 'Datos de la cuenta y actualización de contraseña' },
+      users: { title: 'Gestión de Usuarios', subtitle: 'Administración de roles RBAC y accesos institucionales' },
       certificates: { title: 'Certificados', subtitle: 'Generación masiva y diseño interactivo en alta fidelidad' },
       quizzes: { title: 'Evaluaciones IA', subtitle: 'Generador inteligente con Gemini y simulador de exámenes' },
       whatsapp: { title: 'WhatsApp + Chatbot IA', subtitle: 'Gateway automatizado con base de conocimiento estricta' },
@@ -23,20 +32,25 @@ class AppRouter {
 
     this.currentViewId = null;
     this.currentViewInstance = null;
+    this.currentUser = null;
   }
 
-  init() {
+  async init() {
+    window.router = this;
     this.bindNavigation();
     this.bindKeyStatusIndicator();
     this.updateKeyBadge();
 
-    // Default to Certificates or hash
-    const initialHash = window.location.hash.replace('#', '') || 'certificates';
+    // Check current session from HttpOnly cookie
+    await this.checkSession();
+
+    // Default to Users (if admin), Certificates (if student/public) or hash
+    const initialHash = window.location.hash.replace('#', '') || (this.currentUser ? (this.currentUser.role === 'ESTUDIANTE' ? 'certificates' : 'users') : 'login');
     if (initialHash.startsWith('verify')) {
       const id = initialHash.replace('verify/', '').replace('verify', '').trim();
       this.renderVerificationScreen(id);
     } else {
-      this.navigate(this.views[initialHash] ? initialHash : 'certificates');
+      this.navigate(this.views[initialHash] ? initialHash : 'login');
     }
 
     window.addEventListener('hashchange', () => {
@@ -94,8 +108,109 @@ class AppRouter {
     }
   }
 
+  async checkSession() {
+    try {
+      const res = await fetch('/api/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          this.currentUser = data.user;
+        } else {
+          this.currentUser = null;
+        }
+      } else {
+        this.currentUser = null;
+      }
+    } catch {
+      this.currentUser = null;
+    }
+    this.updateSessionUI();
+  }
+
+  updateSessionUI() {
+    const userBtn = document.getElementById('header-user-btn');
+    const usersNavBtn = document.querySelector('[data-nav="users"]');
+    const mobileUsersBtn = document.querySelector('.mobile-nav-btn[data-nav="users"]');
+
+    if (this.currentUser) {
+      const initials = `${(this.currentUser.firstName || 'U').charAt(0)}${(this.currentUser.lastName || '').charAt(0)}`.toUpperCase();
+      const fullName = `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+      const roleBadge = this.currentUser.role;
+
+      if (userBtn) {
+        userBtn.className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-all text-slate-700 shadow-2xs cursor-pointer';
+        userBtn.innerHTML = `
+          <span class="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-800 text-white flex items-center justify-center text-[10px] font-bold tracking-wider">
+            ${initials}
+          </span>
+          <div class="flex flex-col text-left leading-tight">
+            <span class="text-xs font-bold text-slate-800">${fullName}</span>
+            <span class="text-[9px] font-semibold text-indigo-600 uppercase tracking-wider">${roleBadge}</span>
+          </div>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+        `;
+        userBtn.onclick = (e) => {
+          e.preventDefault();
+          this.navigate('profile');
+        };
+      }
+
+      // RBAC nav button visibility
+      const isAdmin = ['SUPERADMIN', 'ADMINISTRADOR'].includes(this.currentUser.role);
+      if (usersNavBtn) {
+        usersNavBtn.style.display = isAdmin ? 'flex' : 'none';
+      }
+      if (mobileUsersBtn) {
+        mobileUsersBtn.style.display = isAdmin ? 'flex' : 'none';
+      }
+    } else {
+      if (userBtn) {
+        userBtn.className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-all text-slate-700 shadow-2xs cursor-pointer';
+        userBtn.innerHTML = `
+          <span class="w-6 h-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-bold">
+            <i data-lucide="log-in" class="w-3.5 h-3.5 text-slate-600"></i>
+          </span>
+          <span id="header-user-name" class="text-xs font-semibold text-slate-700">Iniciar Sesión</span>
+        `;
+        userBtn.onclick = (e) => {
+          e.preventDefault();
+          this.navigate('login');
+        };
+      }
+
+      if (usersNavBtn) usersNavBtn.style.display = 'none';
+      if (mobileUsersBtn) mobileUsersBtn.style.display = 'none';
+    }
+
+    if (window.lucide) {
+      window.lucide.createIcons();
+    }
+  }
+
   navigate(viewId) {
     if (!this.views[viewId]) return;
+
+    // RBAC Protection guards
+    if (viewId === 'users') {
+      if (!this.currentUser) {
+        Toast.info('Inicia sesión con credenciales de administrador para gestionar usuarios.');
+        this.navigate('login');
+        return;
+      }
+      if (!['SUPERADMIN', 'ADMINISTRADOR'].includes(this.currentUser.role)) {
+        Toast.error('Acceso denegado: tu rol de Estudiante no tiene privilegios de gestión.');
+        this.navigate('certificates');
+        return;
+      }
+    }
+
+    if (viewId === 'profile') {
+      if (!this.currentUser) {
+        Toast.info('Inicia sesión para acceder a tu perfil.');
+        this.navigate('login');
+        return;
+      }
+    }
 
     // Teardown previous view to clean intervals & listeners
     if (this.currentViewInstance && typeof this.currentViewInstance.destroy === 'function') {

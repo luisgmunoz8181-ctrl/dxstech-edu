@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/certificates"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/database"
@@ -41,6 +42,8 @@ func main() {
 	geminiClient := ai.NewGeminiClient()
 
 	// Initialize Feature Services
+	authService := auth.NewService(db, cfg)
+	authHandler := auth.NewHandler(authService, !cfg.IsDevelopment())
 	certService := certificates.NewService(db)
 	quizService := quizzes.NewService(db, geminiClient)
 	waService := whatsapp.NewService(db, geminiClient, cfg)
@@ -50,6 +53,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(safeLoggerMiddleware())
 	r.Use(corsMiddleware())
+	r.Use(auth.Authenticate(cfg.JWTSecret))
 
 	// Set max multipart memory (25 MB)
 	r.MaxMultipartMemory = 25 << 20
@@ -67,6 +71,7 @@ func main() {
 			})
 		})
 
+		authHandler.RegisterRoutes(api.Group("/auth"))
 		certService.RegisterRoutes(api.Group("/certificates"))
 		quizService.RegisterRoutes(api.Group("/quizzes"))
 		waService.RegisterRoutes(api.Group("/whatsapp"))

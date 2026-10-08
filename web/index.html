@@ -91,7 +91,12 @@
     </div>
 
     <!-- Navigation Links -->
-    <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+    <nav id="sidebar-nav" class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+      <button data-nav="users" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
+        <i data-lucide="users" class="w-5 h-5 text-slate-400 transition-colors"></i>
+        <span>Usuarios & Roles</span>
+      </button>
+
       <button data-nav="certificates" class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-sm transition-all text-slate-600 hover:text-slate-900 hover:bg-slate-100">
         <i data-lucide="award" class="w-5 h-5 text-slate-400 transition-colors"></i>
         <span>Certificados</span>
@@ -129,21 +134,25 @@
 
   <!-- Mobile Floating iOS-style Bottom Bar -->
   <nav class="md:hidden fixed bottom-4 inset-x-4 bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 z-40 px-3 py-2 flex items-center justify-around">
-    <button data-nav="certificates" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
-      <i data-lucide="award" class="w-5 h-5"></i>
-      <span class="text-[10px] font-medium">Certificados</span>
+    <button data-nav="certificates" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
+      <i data-lucide="award" class="w-4 h-4"></i>
+      <span class="text-[9px] font-medium">Certificados</span>
     </button>
-    <button data-nav="quizzes" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
-      <i data-lucide="sparkles" class="w-5 h-5"></i>
-      <span class="text-[10px] font-medium">Quizzes IA</span>
+    <button data-nav="quizzes" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
+      <i data-lucide="sparkles" class="w-4 h-4"></i>
+      <span class="text-[9px] font-medium">Quizzes</span>
     </button>
-    <button data-nav="whatsapp" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
-      <i data-lucide="message-square" class="w-5 h-5"></i>
-      <span class="text-[10px] font-medium">WhatsApp</span>
+    <button data-nav="whatsapp" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
+      <i data-lucide="message-square" class="w-4 h-4"></i>
+      <span class="text-[9px] font-medium">WhatsApp</span>
     </button>
-    <button data-nav="settings" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2.5 text-slate-500">
-      <i data-lucide="settings" class="w-5 h-5"></i>
-      <span class="text-[10px] font-medium">Ajustes</span>
+    <button data-nav="users" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
+      <i data-lucide="users" class="w-4 h-4"></i>
+      <span class="text-[9px] font-medium">Usuarios</span>
+    </button>
+    <button data-nav="profile" class="mobile-nav-btn flex flex-col items-center gap-1 py-1 px-2 text-slate-500">
+      <i data-lucide="user" class="w-4 h-4"></i>
+      <span class="text-[9px] font-medium">Perfil</span>
     </button>
   </nav>
 
@@ -157,19 +166,29 @@
           D
         </div>
         <div>
-          <h2 id="view-title" class="text-base font-bold text-slate-800 tracking-tight">Certificados</h2>
-          <p id="view-subtitle" class="text-xs text-slate-400 hidden sm:block">Generación masiva y diseño interactivo en alta fidelidad</p>
+          <h2 id="view-title" class="text-base font-bold text-slate-800 tracking-tight">Usuarios & Roles</h2>
+          <p id="view-subtitle" class="text-xs text-slate-400 hidden sm:block">Gestión de accesos y directores académicos</p>
         </div>
       </div>
 
       <div class="flex items-center gap-3">
+        <!-- User Session Chip -->
+        <div id="header-user-container">
+          <button id="header-user-btn" class="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-all text-slate-700 shadow-2xs">
+            <span class="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold">
+              ?
+            </span>
+            <span id="header-user-name">Iniciar Sesión</span>
+          </button>
+        </div>
+
         <!-- Quick Header API Key Indicator -->
-        <button id="header-key-btn" class="flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-all text-slate-700">
+        <button id="header-key-btn" class="hidden sm:flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-all text-slate-700">
           <span id="header-key-dot" class="w-2 h-2 rounded-full bg-amber-400"></span>
           <span id="header-key-label">Gemini: Pendiente</span>
         </button>
 
-        <a href="/api/health" target="_blank" class="hidden sm:flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium transition-colors border border-emerald-200">
+        <a href="/api/health" target="_blank" class="hidden lg:flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-full font-medium transition-colors border border-emerald-200">
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
           API Health: OK
         </a>
