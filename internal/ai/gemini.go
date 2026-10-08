@@ -40,13 +40,13 @@ type geminiContent struct {
 }
 
 type geminiGenerationConfig struct {
-	ResponseMimeType string  `json:"response_mime_type,omitempty"`
+	ResponseMimeType string  `json:"responseMimeType,omitempty"`
 	Temperature      float32 `json:"temperature,omitempty"`
 }
 
 type geminiRequest struct {
 	Contents          []geminiContent         `json:"contents"`
-	SystemInstruction *geminiContent          `json:"system_instruction,omitempty"`
+	SystemInstruction *geminiContent          `json:"systemInstruction,omitempty"`
 	GenerationConfig  *geminiGenerationConfig `json:"generationConfig,omitempty"`
 }
 
@@ -206,7 +206,14 @@ Responde con calidez, profesionalismo y pedagogía. Si no está en la base, pued
 }
 
 func (g *GeminiClient) callGeminiAPI(ctx context.Context, apiKey string, payload geminiRequest) (string, error) {
-	models := []string{"gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"}
+	apiKey = strings.TrimSpace(apiKey)
+	models := []string{
+		"gemini-2.5-flash",
+		"gemini-2.5-flash-lite",
+		"gemini-3.5-flash-lite",
+		"gemini-3.5-flash",
+		"gemini-2.5-pro",
+	}
 	var lastErr error
 
 	bodyBytes, err := json.Marshal(payload)
@@ -222,6 +229,7 @@ func (g *GeminiClient) callGeminiAPI(ctx context.Context, apiKey string, payload
 			continue
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("x-goog-api-key", apiKey)
 
 		resp, err := g.httpClient.Do(httpReq)
 		if err != nil {
