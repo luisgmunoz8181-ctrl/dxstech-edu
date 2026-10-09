@@ -33,10 +33,11 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata su-exec
 
 # Usuario sin privilegios que ejecuta la aplicación
-RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app -h /app app
+RUN addgroup -S -g 10001 app && adduser -S -H -u 10001 -G app -h /app/data app
 
-# Create directory for persistent SQLite storage
-RUN mkdir -p /app/data && chown app:app /app/data
+# /app (binario y frontend) pertenece a root y es de solo lectura para la aplicación;
+# solo /app/data (SQLite y archivos subidos) es escribible por el usuario `app`.
+RUN mkdir -p /app/data && chown root:root /app && chmod 755 /app && chown app:app /app/data
 
 # Copy compiled binary from builder
 COPY --from=builder /src/dxstech-server /app/dxstech-server

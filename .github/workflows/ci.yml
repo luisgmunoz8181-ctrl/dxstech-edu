@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch: # ejecución manual desde la pestaña Actions o por API
 
 permissions:
   contents: read
@@ -113,12 +114,15 @@ jobs:
           done
           [ "${ok:-0}" = "1" ] || { docker logs app; exit 1; }
           # docker top usa el ps del host: muestra el UID numérico del proceso del servidor.
-          uid="$(docker top app -eo uid,args | awk 'NR>1 && /dxstech-server/ {print $1; exit}')"
+          uid="$(docker top app -eo pid,uid,args | awk 'NR>1 && /dxstech-server/ {print $2; exit}')"
           echo "El servidor corre con UID: $uid"
           [ "$uid" = "10001" ] || { echo "El servidor no corre como el usuario sin privilegios (UID 10001)"; exit 1; }
           owner="$(stat -c %u "$RUNNER_TEMP/data/dxstech.db")"
           [ "$owner" = "10001" ] || { echo "La base de datos no pertenece al usuario 10001 (es $owner)"; exit 1; }
           curl -fsS http://localhost:3000/ | grep -q "DxSTech"
+          # La aplicación no puede modificar su propio binario ni el frontend.
+          if docker exec -u 10001 app sh -c 'touch /app/dxstech-server' 2>/dev/null; then echo "/app no debería ser escribible"; exit 1; fi
+          docker exec -u 10001 app sh -c 'touch /app/data/.write-test'
       - name: Registros del contenedor
         if: always()
         run: docker logs app || true
