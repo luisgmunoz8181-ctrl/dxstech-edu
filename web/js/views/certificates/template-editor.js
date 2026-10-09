@@ -1,5 +1,6 @@
 import { Toast } from '../../components/toast.js';
 import { Loading } from '../../components/loading.js';
+import { readSpreadsheetRows } from '../../utils/spreadsheet.js';
 
 // Editor de plantilla: lienzo, imagen, lista de alumnos (Excel) y generación.
 
@@ -267,70 +268,63 @@ export const templateEditorMethods = {
     this.updateStudentCount();
   },
 
-  processExcelFile(file) {
-    if (!window.XLSX) {
-      Toast.error('Biblioteca SheetJS no cargada');
+  async processExcelFile(file) {
+    let json;
+    try {
+      json = await readSpreadsheetRows(file);
+    } catch (err) {
+      Toast.error(err.message);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = window.XLSX.read(data, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const json = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-        if (json.length < 2) {
-          Toast.warning('El archivo Excel parece estar vacío o no contiene filas de datos.');
-          return;
-        }
-
-        const headers = json[0].map(h => String(h).trim());
-        const select = document.getElementById('excel-column-select');
-        select.innerHTML = '';
-
-        // Auto-detect column matching nombre, nombres, alumno, estudiante
-        const candidates = ['nombre', 'nombres', 'alumno', 'alumnos', 'estudiante', 'estudiantes', 'participante'];
-        let matchedIndex = 0;
-
-        headers.forEach((h, index) => {
-          const opt = document.createElement('option');
-          opt.value = index;
-          opt.textContent = `Columna ${index + 1}: ${h}`;
-          select.appendChild(opt);
-
-          const lower = h.toLowerCase();
-          if (candidates.some(c => lower.includes(c))) {
-            matchedIndex = index;
-          }
-        });
-
-        select.value = matchedIndex;
-        document.getElementById('excel-column-picker').classList.remove('hidden');
-
-        const extractNames = (colIdx) => {
-          const names = [];
-          for (let i = 1; i < json.length; i++) {
-            const row = json[i];
-            if (row && row[colIdx]) {
-              const val = String(row[colIdx]).trim();
-              if (val) names.push(val);
-            }
-          }
-          this.state.students = names;
-          this.updateStudentCount();
-          Toast.success(`Se importaron ${names.length} estudiantes desde Excel.`);
-        };
-
-        select.onchange = () => extractNames(parseInt(select.value));
-        extractNames(matchedIndex);
-      } catch (err) {
-        Toast.error('Error al procesar el archivo Excel: ' + err.message);
+    try {
+      if (json.length < 2) {
+        Toast.warning('El archivo Excel parece estar vacío o no contiene filas de datos.');
+        return;
       }
-    };
-    reader.readAsArrayBuffer(file);
+
+      const headers = json[0].map(h => String(h).trim());
+      const select = document.getElementById('excel-column-select');
+      select.innerHTML = '';
+
+      // Auto-detect column matching nombre, nombres, alumno, estudiante
+      const candidates = ['nombre', 'nombres', 'alumno', 'alumnos', 'estudiante', 'estudiantes', 'participante'];
+      let matchedIndex = 0;
+
+      headers.forEach((h, index) => {
+        const opt = document.createElement('option');
+        opt.value = index;
+        opt.textContent = `Columna ${index + 1}: ${h}`;
+        select.appendChild(opt);
+
+        const lower = h.toLowerCase();
+        if (candidates.some(c => lower.includes(c))) {
+          matchedIndex = index;
+        }
+      });
+
+      select.value = matchedIndex;
+      document.getElementById('excel-column-picker').classList.remove('hidden');
+
+      const extractNames = (colIdx) => {
+        const names = [];
+        for (let i = 1; i < json.length; i++) {
+          const row = json[i];
+          if (row && row[colIdx]) {
+            const val = String(row[colIdx]).trim();
+            if (val) names.push(val);
+          }
+        }
+        this.state.students = names;
+        this.updateStudentCount();
+        Toast.success(`Se importaron ${names.length} estudiantes desde Excel.`);
+      };
+
+      select.onchange = () => extractNames(parseInt(select.value));
+      extractNames(matchedIndex);
+    } catch (err) {
+      Toast.error('Error al procesar el archivo Excel: ' + err.message);
+    }
   },
 
   updateStudentCount() {

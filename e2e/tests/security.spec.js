@@ -63,7 +63,7 @@ test.describe('XSS: los datos de usuarios se muestran como texto, nunca como HTM
 });
 
 test.describe('Sin dependencias externas en ejecución', () => {
-  test('Tailwind, Lucide y SheetJS se cargan desde el propio servidor', async ({ page }) => {
+  test('Tailwind y Lucide se cargan desde el propio servidor', async ({ page }) => {
     const external = [];
     page.on('request', (r) => {
       if (r.resourceType() === 'image') return; // las miniaturas de cursos demo son datos, no código
@@ -75,7 +75,8 @@ test.describe('Sin dependencias externas en ejecución', () => {
     await page.waitForTimeout(800);
     expect(external).toEqual([]);
     expect(await page.evaluate(() => typeof window.lucide)).toBe('object');
-    expect(await page.evaluate(() => typeof window.XLSX)).toBe('object');
+    // SheetJS (con vulnerabilidades conocidas) ya no se carga.
+    expect(await page.evaluate(() => typeof window.XLSX)).toBe('undefined');
     // Si el CSS compilado cargó, el botón de navegación tiene estilos de Tailwind.
     const display = await page.evaluate(() => getComputedStyle(document.querySelector('.nav-btn[data-nav="courses"]')).display);
     expect(display).toBe('flex');

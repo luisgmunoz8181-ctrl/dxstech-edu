@@ -75,10 +75,10 @@ var routeAccess = map[string]access{
 	"POST /api/enrollments/admin/enroll":                   admin,
 	"DELETE /api/enrollments/admin/enroll/:id":             admin,
 
-	// La verificación y la descarga por código/QR son públicas por diseño.
+	// La verificación por código/QR es pública (respuesta mínima); el PDF es solo del titular o admin.
 	"GET /api/certificates/verify/:id":       public,
-	"GET /api/certificates/:id/pdf":          public,
-	"GET /api/certificates/download/:id":     public,
+	"GET /api/certificates/:id/pdf":          authed, // además: solo el titular o un administrador
+	"GET /api/certificates/download/:id":     authed,
 	"GET /api/certificates/my-certificates":  authed,
 	"GET /api/certificates/course/:courseId": authed,
 	"POST /api/certificates/generate":        admin,

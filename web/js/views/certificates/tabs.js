@@ -260,9 +260,9 @@ export const tabsMethods = {
               <!-- Excel Upload Tab Content -->
               <div id="tab-excel-content" class="hidden space-y-3">
                 <div id="excel-drop-zone" class="border-2 border-dashed border-emerald-300 hover:border-emerald-500 rounded-xl p-4 text-center cursor-pointer bg-emerald-50/30 transition-all">
-                  <input type="file" id="excel-file-input" accept=".xlsx,.xls,.csv" class="hidden">
+                  <input type="file" id="excel-file-input" accept=".xlsx,.csv" class="hidden">
                   <i data-lucide="sheet" class="w-7 h-7 text-emerald-600 mx-auto mb-1.5"></i>
-                  <p class="text-xs font-semibold text-slate-700">Arrastra tu archivo Excel (.xlsx / .xls) o haz clic</p>
+                  <p class="text-xs font-semibold text-slate-700">Arrastra tu archivo Excel (.xlsx) o CSV, o haz clic</p>
                   <p class="text-[10px] text-slate-400 mt-0.5">Detección automática inteligente de columnas</p>
                 </div>
 

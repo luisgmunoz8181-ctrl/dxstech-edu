@@ -58,6 +58,16 @@ type IssuedCertificate struct {
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
+// PublicCertificate es la vista pública (sin autenticación) de un certificado.
+type PublicCertificate struct {
+	ID             string  `json:"id"`
+	StudentName    string  `json:"studentName"`
+	CourseTitle    string  `json:"courseTitle"`
+	DurationHours  float64 `json:"durationHours"`
+	InstructorName string  `json:"instructorName"`
+	IssueDate      string  `json:"issueDate"`
+}
+
 type Service struct {
 	db *database.DB
 }
@@ -73,13 +83,16 @@ func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/issued", admin, s.ListIssuedCertificates)
 
 	// Verificación pública (la consulta por código QR no requiere sesión)
-	r.GET("/verify/:id", s.VerifyCertificate)
+	// Los códigos inexistentes cuentan para un límite por IP: evita enumerar certificados.
+	verifyLimiter := auth.NewRateLimiter(30, time.Minute)
+	r.GET("/verify/:id", verifyLimiter.StatusFailureMiddleware(http.StatusNotFound), s.VerifyCertificate)
 
 	// Endpoints Oficiales LMS Fase 4
 	r.GET("/my-certificates", auth.RequireAuth(), s.MyCertificates)
 	r.GET("/course/:courseId", auth.RequireAuth(), s.GetCourseCertificate)
-	r.GET("/:id/pdf", s.DownloadCertificatePDF)
-	r.GET("/download/:id", s.DownloadCertificatePDF)
+	// El PDF contiene datos personales: solo el titular o un administrador.
+	r.GET("/:id/pdf", auth.RequireAuth(), s.DownloadCertificatePDF)
+	r.GET("/download/:id", auth.RequireAuth(), s.DownloadCertificatePDF)
 }
 
 func (s *Service) GenerateCertificates(c *gin.Context) {
@@ -284,9 +297,18 @@ func (s *Service) VerifyCertificate(c *gin.Context) {
 		return
 	}
 
+	// Respuesta pública mínima: lo necesario para validar el diploma, sin
+	// identificadores internos de usuario ni de curso.
 	c.JSON(http.StatusOK, gin.H{
-		"valid":       true,
-		"certificate": cert,
+		"valid": true,
+		"certificate": PublicCertificate{
+			ID:             cert.ID,
+			StudentName:    cert.StudentName,
+			CourseTitle:    cert.CourseTitle,
+			DurationHours:  cert.DurationHours,
+			InstructorName: cert.InstructorName,
+			IssueDate:      cert.IssueDate,
+		},
 		"issuer":      "DxSTech Edu — Academy of Technology & AI",
 		"status":      "Certificado Oficial Verificado",
 	})
@@ -409,6 +431,13 @@ func (s *Service) DownloadCertificatePDF(c *gin.Context) {
 		return
 	}
 
+	role := c.GetString("userRole")
+	isAdmin := role == "SUPERADMIN" || role == "ADMINISTRADOR"
+	if !isAdmin && (cert.UserID == "" || cert.UserID != c.GetString("userID")) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Solo el titular del certificado o un administrador puede descargar el PDF"})
+		return
+	}
+
 	pdfBytes, err := s.GenerateOfficialPDF(cert)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error generando PDF oficial: " + err.Error()})
@@ -420,7 +449,7 @@ func (s *Service) DownloadCertificatePDF(c *gin.Context) {
 
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
-	c.Header("Cache-Control", "public, max-age=86400")
+	c.Header("Cache-Control", "private, max-age=3600")
 	c.Data(http.StatusOK, "application/pdf", pdfBytes)
 }
 
@@ -773,7 +802,8 @@ func (s *Service) GenerateOfficialPDF(cert *IssuedCertificate) ([]byte, error) {
 }
 
 func generateCertID() string {
-	bytes := make([]byte, 4)
+	// 48 bits de aleatoriedad: hacen inviable enumerar códigos válidos.
+	bytes := make([]byte, 6)
 	_, _ = rand.Read(bytes)
 	return fmt.Sprintf("DXS-%d-%s", time.Now().Year(), strings.ToUpper(hex.EncodeToString(bytes)))
 }

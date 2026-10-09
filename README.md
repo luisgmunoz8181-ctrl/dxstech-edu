@@ -32,7 +32,7 @@ La aplicación estará lista y accesible en su navegador:
 - **Editor Visual Interactivo**: Ajuste en vivo de coordenadas X/Y en porcentaje, guías visuales, tamaño de tipografía, selector de color, fuentes estándar y alineación.
 - **Carga de Alumnos**:
   - Entrada manual por renglón.
-  - Carga masiva de libros de Excel (`.xlsx`, `.xls`) vía **SheetJS**, reconociendo automáticamente columnas como `nombre`, `alumno` o `estudiante`.
+  - Carga masiva desde Excel (`.xlsx`) o CSV con un lector propio y seguro (ver más abajo), reconociendo automáticamente columnas como `nombre`, `alumno` o `estudiante`.
 - **Código QR de Verificación Digital**:
   - Incorpora un código QR de alta resolución (256px) con posición y tamaño ajustables en la plantilla.
   - Cada certificado emitido recibe un identificador criptográfico único con formato `DXS-YYYY-XXXX`.
@@ -53,7 +53,7 @@ La aplicación estará lista y accesible en su navegador:
 - **Doble Modo según Entorno**:
   - `APP_ENV=development`: Acceso libre e inmediato a todas las funciones sin requerir autenticación.
   - `APP_ENV=production`: Protección y control de acceso.
-- **Importación Inteligente de Destinatarios**: Carga números de teléfono directamente desde archivos Excel (`.xlsx`, `.xls`) o CSV con detección automática de columnas (`telefono`, `celular`, `phone`, `whatsapp`).
+- **Importación Inteligente de Destinatarios**: Carga números de teléfono directamente desde archivos Excel (`.xlsx`) o CSV con detección automática de columnas (`telefono`, `celular`, `phone`, `whatsapp`).
 - **Plantillas Rápidas de Notificación**: Botones de un clic para cargar mensajes de entrega de certificados, avisos de evaluaciones y mensajes de bienvenida.
 - **Asistente Virtual con Base de Conocimiento**:
   - Switch de activación/pausa instantáneo.
@@ -188,7 +188,9 @@ cd e2e && npm ci && npx playwright install chromium && npx playwright test   # f
 
 ## 🎨 Estilos y librerías del frontend
 
-El frontend **no depende de CDNs en tiempo de ejecución**: Tailwind se compila a `web/css/tailwind.css`, y Lucide y SheetJS se sirven desde `web/vendor/` con versión fija.
+El frontend **no depende de CDNs en tiempo de ejecución**: Tailwind se compila a `web/css/tailwind.css`, y Lucide y fflate se sirven desde `web/vendor/` con versión fija.
+
+**Lectura de Excel/CSV:** `web/js/utils/spreadsheet.js` lee `.xlsx` (ZIP + XML con `fflate` y el `DOMParser` nativo) y `.csv`, con límites de tamaño (5 MB el archivo, 30 MB descomprimido) y de filas. Reemplaza a SheetJS 0.18.5, que tiene vulnerabilidades conocidas y ya no se publica en npm. El formato antiguo `.xls` no es compatible: se pide guardar como `.xlsx` o `.csv`.
 Si agregas clases de Tailwind nuevas, regenera el CSS y súbelo al repositorio:
 
 ```bash
@@ -215,7 +217,7 @@ pnpm build:css
 │   ├── quizzes/service.go      # Orquestación de exámenes y persistencia
 │   └── whatsapp/service.go     # Gateway desacoplado, cola con rate limit y bitácora
 ├── web/
-│   ├── index.html              # Shell SPA con Tailwind, Lucide y SheetJS
+│   ├── index.html              # Shell SPA con Tailwind y Lucide
 │   └── js/
 │       ├── main.js             # Enrutador de vistas, verificación QR pública y estado
 │       ├── components/         # Toast, Modal, Loading, Empty State

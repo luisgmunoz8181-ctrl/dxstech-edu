@@ -407,10 +407,15 @@ class AppRouter {
               </div>
 
               <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5">
-                <a href="/api/certificates/${esc(c.id)}/pdf" target="_blank" download="Certificado_${esc(c.id)}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
+                ${this.currentUser ? `
+                <a href="/api/certificates/${esc(c.id)}/pdf" target="_blank" id="verify-download-pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
                   <i data-lucide="download" class="w-4 h-4"></i>
-                  <span>Descargar Diploma Oficial (PDF)</span>
-                </a>
+                  <span>Descargar mi Diploma (PDF)</span>
+                </a>` : `
+                <a href="#login" class="px-5 py-2.5 rounded-xl text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center gap-2">
+                  <i data-lucide="log-in" class="w-4 h-4"></i>
+                  <span>Inicia sesión para descargar tu diploma</span>
+                </a>`}
                 <button id="copy-verify-url-btn" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs">
                   <i data-lucide="copy" class="w-3.5 h-3.5 text-slate-500"></i>
                   <span>Copiar Enlace</span>
@@ -423,6 +428,22 @@ class AppRouter {
             </div>
           </div>
         `;
+
+        document.getElementById('verify-download-pdf')?.addEventListener('click', async (e) => {
+          // Solo el titular o un administrador puede descargar el PDF; se comprueba antes de abrirlo.
+          e.preventDefault();
+          const res = await fetch(`/api/certificates/${encodeURIComponent(c.id)}/pdf`);
+          if (!res.ok) {
+            Toast.error('Solo el titular del certificado o un administrador puede descargar el PDF.');
+            return;
+          }
+          const url = URL.createObjectURL(await res.blob());
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Certificado_${c.id}.pdf`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
 
         document.getElementById('copy-verify-url-btn')?.addEventListener('click', () => {
           navigator.clipboard.writeText(window.location.href).then(() => {

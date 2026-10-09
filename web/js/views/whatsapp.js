@@ -2,6 +2,7 @@ import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
 import { Loading } from '../components/loading.js';
 import { esc } from '../utils/escape.js';
+import { readSpreadsheetRows } from '../utils/spreadsheet.js';
 
 export const WhatsAppView = {
   state: {
@@ -189,7 +190,7 @@ export const WhatsAppView = {
                 <div class="flex items-center justify-between mt-1">
                   <p class="text-[10px] text-slate-400">Un número por línea o separados por comas.</p>
                   <div class="flex items-center gap-2">
-                    <input type="file" id="wa-recipients-file-input" accept=".xlsx,.xls,.csv" class="hidden">
+                    <input type="file" id="wa-recipients-file-input" accept=".xlsx,.csv" class="hidden">
                     <button type="button" id="import-wa-excel-btn" class="text-[10px] text-slate-600 hover:text-emerald-700 font-semibold flex items-center gap-1 hover:underline">
                       <i data-lucide="file-spreadsheet" class="w-3 h-3 text-emerald-600"></i>
                       <span>Importar Excel/CSV</span>
@@ -752,77 +753,70 @@ Certificados: Al aprobar con 60% o más, se emite un certificado digital en PDF 
     });
   },
 
-  processRecipientsExcelFile(file) {
-    if (!window.XLSX) {
-      Toast.error('Biblioteca SheetJS no cargada en el navegador.');
+  async processRecipientsExcelFile(file) {
+    let json;
+    try {
+      json = await readSpreadsheetRows(file);
+    } catch (err) {
+      Toast.error(err.message);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = window.XLSX.read(data, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const json = window.XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-
-        if (!json || json.length < 2) {
-          Toast.warning('El archivo Excel o CSV no contiene suficientes filas de datos.');
-          return;
-        }
-
-        const headers = json[0].map(h => String(h || '').trim().toLowerCase());
-        const phoneKeywords = ['telefono', 'teléfono', 'celular', 'phone', 'whatsapp', 'tel', 'movil', 'móvil', 'numero', 'número'];
-        let matchedCol = -1;
-
-        headers.forEach((h, idx) => {
-          if (phoneKeywords.some(k => h.includes(k)) && matchedCol === -1) {
-            matchedCol = idx;
-          }
-        });
-
-        const numbers = [];
-        for (let i = 1; i < json.length; i++) {
-          const row = json[i];
-          if (!row) continue;
-
-          let rawVal = '';
-          if (matchedCol !== -1 && row[matchedCol]) {
-            rawVal = String(row[matchedCol]).trim();
-          } else {
-            for (let c = 0; c < row.length; c++) {
-              const val = String(row[c] || '').trim();
-              if (val.replace(/[^0-9]/g, '').length >= 7) {
-                rawVal = val;
-                break;
-              }
-            }
-          }
-
-          if (rawVal) {
-            const cleaned = rawVal.replace(/[^0-9+]/g, '');
-            if (cleaned.length >= 7) {
-              numbers.push(cleaned);
-            }
-          }
-        }
-
-        if (numbers.length === 0) {
-          Toast.warning('No se detectaron columnas con números de teléfono válidos en el archivo.');
-          return;
-        }
-
-        const input = document.getElementById('recipients-input');
-        const currentText = input.value.trim();
-        const combined = currentText ? `${currentText}\n${numbers.join('\n')}` : numbers.join('\n');
-        input.value = combined;
-        Toast.success(`Se importaron ${numbers.length} números de teléfono desde el archivo.`);
-      } catch (err) {
-        Toast.error('Error al procesar archivo: ' + err.message);
+    try {
+      if (!json || json.length < 2) {
+        Toast.warning('El archivo Excel o CSV no contiene suficientes filas de datos.');
+        return;
       }
-    };
-    reader.readAsArrayBuffer(file);
+
+      const headers = json[0].map(h => String(h || '').trim().toLowerCase());
+      const phoneKeywords = ['telefono', 'teléfono', 'celular', 'phone', 'whatsapp', 'tel', 'movil', 'móvil', 'numero', 'número'];
+      let matchedCol = -1;
+
+      headers.forEach((h, idx) => {
+        if (phoneKeywords.some(k => h.includes(k)) && matchedCol === -1) {
+          matchedCol = idx;
+        }
+      });
+
+      const numbers = [];
+      for (let i = 1; i < json.length; i++) {
+        const row = json[i];
+        if (!row) continue;
+
+        let rawVal = '';
+        if (matchedCol !== -1 && row[matchedCol]) {
+          rawVal = String(row[matchedCol]).trim();
+        } else {
+          for (let c = 0; c < row.length; c++) {
+            const val = String(row[c] || '').trim();
+            if (val.replace(/[^0-9]/g, '').length >= 7) {
+              rawVal = val;
+              break;
+            }
+          }
+        }
+
+        if (rawVal) {
+          const cleaned = rawVal.replace(/[^0-9+]/g, '');
+          if (cleaned.length >= 7) {
+            numbers.push(cleaned);
+          }
+        }
+      }
+
+      if (numbers.length === 0) {
+        Toast.warning('No se detectaron columnas con números de teléfono válidos en el archivo.');
+        return;
+      }
+
+      const input = document.getElementById('recipients-input');
+      const currentText = input.value.trim();
+      const combined = currentText ? `${currentText}\n${numbers.join('\n')}` : numbers.join('\n');
+      input.value = combined;
+      Toast.success(`Se importaron ${numbers.length} números de teléfono desde el archivo.`);
+    } catch (err) {
+      Toast.error('Error al procesar archivo: ' + err.message);
+    }
   },
 
   escapeHtml(str) {

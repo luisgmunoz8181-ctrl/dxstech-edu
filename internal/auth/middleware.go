@@ -270,6 +270,21 @@ func (l *MemoryRateLimiter) Middleware() gin.HandlerFunc {
 // oficina o una red con NAT) no se bloquean entre sí, mientras que quien
 // adivina contraseñas sí queda limitado.
 func (l *MemoryRateLimiter) FailureMiddleware() gin.HandlerFunc {
+	return l.StatusFailureMiddleware(http.StatusUnauthorized)
+}
+
+// StatusFailureMiddleware cuenta solo las peticiones cuya respuesta tenga uno de
+// los códigos indicados (p. ej. 404 en la verificación de certificados, para
+// frenar la enumeración de códigos).
+func (l *MemoryRateLimiter) StatusFailureMiddleware(codes ...int) gin.HandlerFunc {
+	isFailure := func(status int) bool {
+		for _, c := range codes {
+			if c == status {
+				return true
+			}
+		}
+		return false
+	}
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 
@@ -283,7 +298,7 @@ func (l *MemoryRateLimiter) FailureMiddleware() gin.HandlerFunc {
 
 		c.Next()
 
-		if c.Writer.Status() == http.StatusUnauthorized {
+		if isFailure(c.Writer.Status()) {
 			l.mu.Lock()
 			now := time.Now()
 			l.attempts[ip] = append(l.recent(ip, now), now)

@@ -115,6 +115,24 @@ func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/:id", auth.RequireAuth(), s.GetByID)
 }
 
+// canAccessQuiz indica si el usuario puede ver o responder una evaluación:
+// administradores siempre; estudiantes solo si la evaluación pertenece a un
+// curso en el que están matriculados. Las evaluaciones sueltas (sin curso) son
+// material de trabajo de los administradores.
+func (s *Service) canAccessQuiz(c *gin.Context, quizCourseID string) bool {
+	if isAdminRole(c) {
+		return true
+	}
+	if quizCourseID == "" {
+		return false
+	}
+	return s.db.UserCanAccessCourse(c.Request.Context(), c.GetString("userID"), c.GetString("userRole"), quizCourseID)
+}
+
+func denyQuiz(c *gin.Context) {
+	c.JSON(http.StatusForbidden, gin.H{"error": "Debes estar matriculado en el curso de esta evaluación para acceder a ella"})
+}
+
 func isAdminRole(c *gin.Context) bool {
 	role := c.GetString("userRole")
 	return role == "SUPERADMIN" || role == "ADMINISTRADOR"
@@ -300,11 +318,11 @@ func (s *Service) Submit(c *gin.Context) {
 		return
 	}
 
-	if req.CourseID != "" {
-		courseID = req.CourseID
-	}
-	if req.LessonID != "" {
-		lessonID = req.LessonID
+	// Curso y lección salen de la evaluación guardada, nunca del cliente: de lo
+	// contrario se podría marcar progreso (y matricularse) en cualquier curso.
+	if !s.canAccessQuiz(c, courseID) {
+		denyQuiz(c)
+		return
 	}
 
 	var questions []ai.QuizQuestion
@@ -392,6 +410,15 @@ func (s *Service) GetByLesson(c *gin.Context) {
 		return
 	}
 
+	accessCourse := q.CourseID
+	if accessCourse == "" {
+		_ = s.db.QueryRowContext(c.Request.Context(), `SELECT course_id FROM lessons WHERE id = ?`, lessonID).Scan(&accessCourse)
+	}
+	if !s.canAccessQuiz(c, accessCourse) {
+		denyQuiz(c)
+		return
+	}
+
 	if err := json.Unmarshal([]byte(questionsJSON), &q.Questions); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error deserializando preguntas"})
 		return
@@ -459,6 +486,11 @@ func (s *Service) GetByID(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Evaluación no encontrada"})
+		return
+	}
+
+	if !s.canAccessQuiz(c, q.CourseID) {
+		denyQuiz(c)
 		return
 	}
 
