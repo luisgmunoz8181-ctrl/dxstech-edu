@@ -2,6 +2,7 @@ package courses
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -49,6 +50,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 
 		// File Upload
 		admin.POST("/upload", h.HandleUpload)
+		admin.POST("/uploads/cleanup", h.HandleCleanupUploads)
 	}
 }
 
@@ -369,4 +371,21 @@ func (h *Handler) HandleGetTutorContext(c *gin.Context) {
 		"courseId": courseID,
 		"context":  tutorCtx,
 	})
+}
+
+// HandleCleanupUploads detecta (o, con ?apply=true, elimina) los archivos de
+// /uploads que ningún curso o lección referencia. Por defecto solo informa.
+// Ignora los archivos modificados hace menos de una hora.
+func (h *Handler) HandleCleanupUploads(c *gin.Context) {
+	apply := c.Query("apply") == "true"
+	orphans, err := h.svc.CleanOrphanUploads(c.Request.Context(), apply, time.Hour)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo revisar el directorio de archivos"})
+		return
+	}
+	var total int64
+	for _, o := range orphans {
+		total += o.SizeBytes
+	}
+	c.JSON(http.StatusOK, gin.H{"dryRun": !apply, "count": len(orphans), "totalBytes": total, "files": orphans})
 }

@@ -68,15 +68,23 @@ func (s *Service) GetStudentEnrollments(ctx context.Context, userID string) ([]E
 			e.enrolled_at, e.completed_at, e.last_accessed_at, coalesce(e.last_lesson_id, ''),
 			c.title, c.code, c.thumbnail_url, c.category, c.level,
 			c.instructor_name, c.duration_hours,
-			(SELECT COUNT(*) FROM lesson_progress lp WHERE lp.user_id = e.user_id AND lp.course_id = e.course_id) as completed_count,
-			(SELECT COUNT(*) FROM lessons l WHERE l.course_id = e.course_id) as total_count
+			coalesce(lp.cnt, 0) as completed_count,
+			coalesce(lc.cnt, 0) as total_count
 		FROM enrollments e
 		JOIN courses c ON e.course_id = c.id
+		LEFT JOIN (
+			SELECT course_id, COUNT(*) AS cnt FROM lesson_progress WHERE user_id = ? GROUP BY course_id
+		) lp ON lp.course_id = e.course_id
+		LEFT JOIN (
+			SELECT course_id, COUNT(*) AS cnt FROM lessons
+			WHERE course_id IN (SELECT course_id FROM enrollments WHERE user_id = ?)
+			GROUP BY course_id
+		) lc ON lc.course_id = e.course_id
 		WHERE e.user_id = ? AND e.status != 'dropped'
 		ORDER BY e.last_accessed_at DESC
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, userID)
+	rows, err := s.db.QueryContext(ctx, query, userID, userID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("error consultando matrículas del estudiante: %w", err)
 	}
@@ -278,15 +286,19 @@ func (s *Service) ListCourseStudents(ctx context.Context, courseID string) ([]En
 			e.enrolled_at, e.completed_at, e.last_accessed_at, coalesce(e.last_lesson_id, ''),
 			u.first_name || ' ' || u.last_name as student_name,
 			u.email as student_email,
-			(SELECT COUNT(*) FROM lesson_progress lp WHERE lp.user_id = e.user_id AND lp.course_id = e.course_id) as completed_count,
-			(SELECT COUNT(*) FROM lessons l WHERE l.course_id = e.course_id) as total_count
+			coalesce(lp.cnt, 0) as completed_count,
+			lc.cnt as total_count
 		FROM enrollments e
 		JOIN users u ON e.user_id = u.id
+		LEFT JOIN (
+			SELECT user_id, COUNT(*) AS cnt FROM lesson_progress WHERE course_id = ? GROUP BY user_id
+		) lp ON lp.user_id = e.user_id
+		CROSS JOIN (SELECT COUNT(*) AS cnt FROM lessons WHERE course_id = ?) lc
 		WHERE e.course_id = ? AND e.status != 'dropped'
 		ORDER BY e.enrolled_at DESC
 	`
 
-	rows, err := s.db.QueryContext(ctx, query, courseID)
+	rows, err := s.db.QueryContext(ctx, query, courseID, courseID, courseID)
 	if err != nil {
 		return nil, fmt.Errorf("error consultando estudiantes matriculados: %w", err)
 	}

@@ -43,9 +43,11 @@ func (s *Service) ListCourses(ctx context.Context, role, search, category, statu
 			c.thumbnail_url, c.category, c.instructor_name, c.duration_hours,
 			c.level, c.status, c.published_at, c.requirements, c.learning_objectives,
 			c.created_by, c.created_at, c.updated_at,
-			(SELECT COUNT(*) FROM course_modules m WHERE m.course_id = c.id) as modules_count,
-			(SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id) as lessons_count
+			coalesce(mc.cnt, 0) as modules_count,
+			coalesce(lc.cnt, 0) as lessons_count
 		FROM courses c
+		LEFT JOIN (SELECT course_id, COUNT(*) AS cnt FROM course_modules GROUP BY course_id) mc ON mc.course_id = c.id
+		LEFT JOIN (SELECT course_id, COUNT(*) AS cnt FROM lessons GROUP BY course_id) lc ON lc.course_id = c.id
 		WHERE 1=1
 	`)
 
@@ -314,6 +316,8 @@ func (s *Service) UpdateCourse(ctx context.Context, id string, req UpdateCourseR
 		}
 	}
 
+	oldThumbs := s.queryStrings(ctx, `SELECT thumbnail_url FROM courses WHERE id = ?`, id)
+
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE courses SET
 			title = ?, code = ?, short_description = ?, description = ?,
@@ -330,6 +334,7 @@ func (s *Service) UpdateCourse(ctx context.Context, id string, req UpdateCourseR
 	if err != nil {
 		return nil, fmt.Errorf("error al actualizar curso: %w", err)
 	}
+	s.removeUnreferencedUploads(ctx, oldThumbs...)
 
 	return s.GetCourse(ctx, id, "ADMINISTRADOR")
 }
@@ -432,6 +437,10 @@ func (s *Service) ChangeCourseStatus(ctx context.Context, id string, status stri
 }
 
 func (s *Service) DeleteCourse(ctx context.Context, id string) error {
+	// Se recogen las URLs antes de borrar: el CASCADE elimina módulos y lecciones.
+	urls := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE course_id = ?`, id)
+	urls = append(urls, s.queryStrings(ctx, `SELECT thumbnail_url FROM courses WHERE id = ?`, id)...)
+
 	res, err := s.db.ExecContext(ctx, "DELETE FROM courses WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("error al eliminar curso: %w", err)
@@ -440,6 +449,7 @@ func (s *Service) DeleteCourse(ctx context.Context, id string) error {
 	if rowsAffected == 0 {
 		return errors.New("curso no encontrado")
 	}
+	s.removeUnreferencedUploads(ctx, urls...)
 	return nil
 }
 
@@ -512,6 +522,8 @@ func (s *Service) UpdateModule(ctx context.Context, moduleID string, req UpdateM
 }
 
 func (s *Service) DeleteModule(ctx context.Context, moduleID string) error {
+	urls := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE module_id = ?`, moduleID)
+
 	res, err := s.db.ExecContext(ctx, "DELETE FROM course_modules WHERE id = ?", moduleID)
 	if err != nil {
 		return err
@@ -520,6 +532,7 @@ func (s *Service) DeleteModule(ctx context.Context, moduleID string) error {
 	if rowsAffected == 0 {
 		return errors.New("módulo no encontrado")
 	}
+	s.removeUnreferencedUploads(ctx, urls...)
 	return nil
 }
 
@@ -611,6 +624,9 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 		isFreeInt = 1
 	}
 
+	// Archivo anterior: si se reemplaza, el viejo queda huérfano.
+	oldURLs := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE id = ?`, lessonID)
+
 	now := time.Now()
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE lessons SET
@@ -630,6 +646,7 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 	if rowsAffected == 0 {
 		return nil, errors.New("lección no encontrada")
 	}
+	s.removeUnreferencedUploads(ctx, oldURLs...)
 
 	var l Lesson
 	var freeFlag int
@@ -648,6 +665,8 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 }
 
 func (s *Service) DeleteLesson(ctx context.Context, lessonID string) error {
+	urls := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE id = ?`, lessonID)
+
 	res, err := s.db.ExecContext(ctx, "DELETE FROM lessons WHERE id = ?", lessonID)
 	if err != nil {
 		return err
@@ -656,6 +675,7 @@ func (s *Service) DeleteLesson(ctx context.Context, lessonID string) error {
 	if rowsAffected == 0 {
 		return errors.New("lección no encontrada")
 	}
+	s.removeUnreferencedUploads(ctx, urls...)
 	return nil
 }
 

@@ -149,6 +149,17 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 
 ---
 
+## ⚙️ Operación y rendimiento
+
+- **Base de datos (SQLite en modo WAL):** pool de 8 conexiones (varias lecturas en paralelo, escrituras serializadas por SQLite), claves foráneas activas (`ON DELETE CASCADE` se aplica de verdad) e índices en las consultas principales.
+- **Migraciones versionadas:** el esquema vive en `internal/database/migrations.go` y se registra en la tabla `schema_migrations`. Para cambiar el esquema, **agrega una migración nueva al final** (nunca edites una ya publicada). Las bases anteriores al versionado se adoptan automáticamente sin perder datos.
+- **Healthcheck:** `GET /api/health` responde `200` si la base de datos responde y `503` (`degraded`) si no, de modo que Docker, Coolify o Render puedan reiniciar la instancia.
+- **Timeouts:** el servidor usa plazos cortos (10 s de cabeceras, 30 s de lectura/escritura). Las rutas lentas (subida de archivos, generación con IA, certificados masivos y reportes CSV) amplían su plazo solo para ellas.
+- **Compresión y caché:** respuestas gzip para JSON/JS/CSS/HTML/CSV; `/vendor` con caché inmutable, `/js` y `/css` con revalidación (304) y `/api` sin caché.
+- **Archivos subidos:** al borrar o reemplazar una lección, módulo o curso se eliminan de `/uploads` los archivos que ya nadie usa (los compartidos por cursos duplicados se conservan). Para limpiar huérfanos históricos, un administrador puede llamar a `POST /api/courses/uploads/cleanup` (solo informa) y luego a `POST /api/courses/uploads/cleanup?apply=true` (elimina; ignora archivos de la última hora).
+
+---
+
 ## 🎨 Estilos y librerías del frontend
 
 El frontend **no depende de CDNs en tiempo de ejecución**: Tailwind se compila a `web/css/tailwind.css`, y Lucide y SheetJS se sirven desde `web/vendor/` con versión fija.
