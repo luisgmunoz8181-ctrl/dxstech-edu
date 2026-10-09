@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"dxstech-edu/internal/audit"
 	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/database"
 
@@ -214,8 +215,8 @@ func (s *Service) GenerateCertificates(c *gin.Context) {
 				qrImgName := fmt.Sprintf("qr_%d", i)
 				pdf.RegisterImageOptionsReader(qrImgName, gofpdf.ImageOptions{ImageType: "PNG"}, bytes.NewReader(qrPNG))
 
-				qrX := (req.QRXPercent / 100.0) * pageWd - (req.QRSize / 2.0)
-				qrY := (req.QRYPercent / 100.0) * pageHt - (req.QRSize / 2.0)
+				qrX := (req.QRXPercent/100.0)*pageWd - (req.QRSize / 2.0)
+				qrY := (req.QRYPercent/100.0)*pageHt - (req.QRSize / 2.0)
 				pdf.ImageOptions(qrImgName, qrX, qrY, req.QRSize, req.QRSize, false, gofpdf.ImageOptions{ImageType: "PNG"}, 0, "")
 
 				// Print small verification code below QR
@@ -261,6 +262,7 @@ func (s *Service) GenerateCertificates(c *gin.Context) {
 		return
 	}
 
+	audit.Record(s.db, c, audit.CertGenerateBulk, "issued_certificates", "Generación masiva: %d certificados — %s", len(validStudents), req.CourseTitle)
 	c.Header("Content-Type", "application/zip")
 	c.Header("Content-Disposition", "attachment; filename=certificados_dxstech.zip")
 	c.Data(http.StatusOK, "application/zip", zipBuf.Bytes())
@@ -452,6 +454,8 @@ func (s *Service) IssueCourseCertificate(ctx context.Context, userID, courseID, 
 	if err != nil {
 		return nil, fmt.Errorf("error guardando certificado emitido: %w", err)
 	}
+	audit.Log(s.db, audit.Entry{UserID: userID, Action: audit.CertIssued, Resource: "issued_certificates",
+		Details: fmt.Sprintf("Certificado %s emitido a %s por el curso %s", certID, studentName, courseTitle)})
 
 	return &IssuedCertificate{
 		ID:             certID,

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -46,6 +47,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 		adminGroup.POST("", h.HandleCreateUser)
 		adminGroup.PUT("/:id", h.HandleUpdateUser)
 		adminGroup.PATCH("/:id/status", h.HandleToggleUserStatus)
+		adminGroup.POST("/:id/unlock", h.HandleUnlockUser)
 	}
 }
 
@@ -58,6 +60,12 @@ func (h *Handler) HandleLogin(c *gin.Context) {
 
 	resp, err := h.svc.Login(c.Request.Context(), req, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
+		var locked *LockedError
+		if errors.As(err, &locked) {
+			c.Header("Retry-After", strconv.Itoa(int(time.Until(locked.Until).Seconds())+1))
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error(), "code": "ACCOUNT_LOCKED"})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
@@ -100,6 +108,11 @@ func (h *Handler) HandleChangePassword(c *gin.Context) {
 	userID := c.GetString("userID")
 	err := h.svc.ChangePassword(c.Request.Context(), userID, req.CurrentPassword, req.NewPassword, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
+		var locked *LockedError
+		if errors.As(err, &locked) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error(), "code": "ACCOUNT_LOCKED"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -216,5 +229,15 @@ func (h *Handler) HandleToggleUserStatus(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *Handler) HandleUnlockUser(c *gin.Context) {
+	adminID := c.GetString("userID")
+	user, err := h.svc.UnlockUser(c.Request.Context(), adminID, c.Param("id"), c.ClientIP(), c.Request.UserAgent())
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, user)
 }

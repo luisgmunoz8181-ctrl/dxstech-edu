@@ -31,6 +31,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 		r.GET("/monitoring/students", h.HandleStudentMonitoring)
 		r.GET("/reports/enrollments.csv", h.HandleExportEnrollmentsCSV)
 		r.GET("/reports/certificates.csv", h.HandleExportCertificatesCSV)
+		r.GET("/audit", h.HandleAuditLogs)
 	}
 }
 

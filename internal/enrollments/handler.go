@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"dxstech-edu/internal/audit"
 	"dxstech-edu/internal/auth"
 )
 
@@ -132,6 +133,7 @@ func (h *Handler) HandleAdminEnrollStudent(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.EnrollAdmin, "enrollments", "Matrícula administrativa: usuario %s en el curso %s", req.UserID, req.CourseID)
 	c.JSON(http.StatusCreated, enr)
 }
 
@@ -143,5 +145,6 @@ func (h *Handler) HandleAdminUnenroll(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.UnenrollAdmin, "enrollments", "Matrícula %s dada de baja por un administrador", id)
 	c.JSON(http.StatusOK, gin.H{"message": "Estudiante desmatriculado correctamente"})
 }

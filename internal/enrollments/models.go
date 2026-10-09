@@ -45,8 +45,8 @@ type StudentStats struct {
 }
 
 type ToggleProgressRequest struct {
-	CourseID string `json:"courseId" binding:"required"`
-	LessonID string `json:"lessonId" binding:"required"`
+	CourseID  string `json:"courseId" binding:"required"`
+	LessonID  string `json:"lessonId" binding:"required"`
 	Completed bool   `json:"completed"`
 }
 

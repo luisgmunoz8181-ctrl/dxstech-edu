@@ -2,6 +2,7 @@ package auth
 
 import (
 	"errors"
+	"fmt"
 	"net/mail"
 	"regexp"
 	"strings"
@@ -103,9 +104,32 @@ func NormalizeAndValidateEmail(email string) (string, error) {
 	return addr.Address, nil
 }
 
-func ValidatePasswordPolicy(password string) error {
-	if len(password) < 8 {
-		return errors.New("la contraseña debe tener al menos 8 caracteres")
+const (
+	minPasswordLength = 10
+	// bcrypt solo procesa los primeros 72 bytes; más allá se truncaría en silencio.
+	maxPasswordBytes = 72
+)
+
+// commonPasswords son contraseñas triviales que cumplirían las reglas de
+// composición pero se adivinan de inmediato (se comparan en minúsculas).
+var commonPasswords = map[string]bool{
+	"password1": true, "password12": true, "password123": true, "password1234": true,
+	"contraseña1": true, "contraseña123": true, "contrasena123": true, "qwerty12345": true,
+	"qwertyuiop1": true, "admin12345": true, "admin1234*": true, "admin123456": true,
+	"student1234*": true, "estudiante123": true, "welcome123": true, "bienvenido1": true,
+	"letmein1234": true, "iloveyou123": true, "abc1234567": true, "1234567890a": true,
+	"dxstech2026": true, "dxstech1234": true, "dxstech12345": true, "123456789a": true,
+}
+
+// ValidatePasswordPolicy valida la contraseña. Opcionalmente recibe datos
+// personales del usuario (correo, nombre, apellido) que no pueden formar parte
+// de ella.
+func ValidatePasswordPolicy(password string, personal ...string) error {
+	if len([]rune(password)) < minPasswordLength {
+		return fmt.Errorf("la contraseña debe tener al menos %d caracteres", minPasswordLength)
+	}
+	if len(password) > maxPasswordBytes {
+		return fmt.Errorf("la contraseña no puede superar los %d bytes", maxPasswordBytes)
 	}
 
 	var hasUpper, hasLower, hasNumber bool
@@ -119,9 +143,23 @@ func ValidatePasswordPolicy(password string) error {
 			hasNumber = true
 		}
 	}
-
 	if !hasUpper || !hasLower || !hasNumber {
 		return errors.New("la contraseña debe incluir al menos una letra mayúscula, una minúscula y un número")
+	}
+
+	lower := strings.ToLower(password)
+	if commonPasswords[lower] {
+		return errors.New("esa contraseña es demasiado común; elige una más difícil de adivinar")
+	}
+	for _, p := range personal {
+		// Para un correo se compara solo la parte local (antes de la @).
+		if at := strings.Index(p, "@"); at > 0 {
+			p = p[:at]
+		}
+		p = strings.ToLower(strings.TrimSpace(p))
+		if len([]rune(p)) >= 4 && strings.Contains(lower, p) {
+			return errors.New("la contraseña no debe contener tu nombre ni tu correo")
+		}
 	}
 
 	return nil

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/audit"
 	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/database"
@@ -196,6 +197,7 @@ func (s *Service) UpdateConfig(c *gin.Context) {
 		return
 	}
 
+	audit.Record(s.db, c, audit.WhatsAppConfig, "whatsapp_config", "Configuración actualizada (activo=%t, modo estricto=%t)", req.IsActive, req.StrictMode)
 	c.JSON(http.StatusOK, gin.H{"message": "Configuración de WhatsApp guardada exitosamente", "config": req})
 }
 
@@ -261,6 +263,7 @@ func (s *Service) SendBulkMessages(c *gin.Context) {
 		}
 	}(req.Recipients, req.Message, time.Duration(req.DelaySec)*time.Second)
 
+	audit.Record(s.db, c, audit.WhatsAppSend, "whatsapp", "Envío masivo programado: %d destinatarios, %d s entre mensajes", len(req.Recipients), req.DelaySec)
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":  fmt.Sprintf("%d mensaje(s) programados para envío en cola con rate limit", len(req.Recipients)),
 		"inQueue":  len(req.Recipients),
@@ -335,6 +338,7 @@ func (s *Service) ClearLogs(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al vaciar la bitácora: " + err.Error()})
 		return
 	}
+	audit.Record(s.db, c, audit.WhatsAppLogsWipe, "whatsapp_logs", "Bitácora de envíos vaciada")
 	c.JSON(http.StatusOK, gin.H{"message": "Bitácora vaciada correctamente"})
 }
 
@@ -389,6 +393,7 @@ func (s *Service) SyncCourses(c *gin.Context) {
 		return
 	}
 
+	audit.Record(s.db, c, audit.WhatsAppSync, "whatsapp_config", "Base de conocimiento sincronizada con %d cursos", count)
 	c.JSON(http.StatusOK, gin.H{
 		"message":       fmt.Sprintf("Se sincronizaron exitosamente %d cursos a la Base de Conocimiento de WhatsApp", count),
 		"syncedCourses": count,
@@ -458,4 +463,3 @@ func (s *Service) AskTutor(c *gin.Context) {
 		"courseId": req.CourseID,
 	})
 }
-

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"dxstech-edu/internal/audit"
 	"dxstech-edu/internal/auth"
 )
 
@@ -96,6 +97,7 @@ func (h *Handler) HandleCreateCourse(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseCreate, "courses", "Curso creado: %s (%s)", course.Code, course.ID)
 	c.JSON(http.StatusCreated, course)
 }
 
@@ -113,6 +115,7 @@ func (h *Handler) HandleUpdateCourse(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseUpdate, "courses", "Curso actualizado: %s (%s)", course.Code, course.ID)
 	c.JSON(http.StatusOK, course)
 }
 
@@ -126,6 +129,7 @@ func (h *Handler) HandleDuplicateCourse(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseDuplicate, "courses", "Curso %s duplicado como %s", id, course.ID)
 	c.JSON(http.StatusCreated, course)
 }
 
@@ -143,16 +147,20 @@ func (h *Handler) HandleChangeStatus(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseStatus, "courses", "Curso %s (%s) pasó a estado %s", course.Code, course.ID, req.Status)
 	c.JSON(http.StatusOK, course)
 }
 
 func (h *Handler) HandleDeleteCourse(c *gin.Context) {
 	id := c.Param("id")
+	var code, title string
+	_ = h.svc.db.QueryRowContext(c.Request.Context(), `SELECT code, title FROM courses WHERE id = ?`, id).Scan(&code, &title)
 	if err := h.svc.DeleteCourse(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseDelete, "courses", "Curso eliminado: %s \"%s\" (%s)", code, title, id)
 	c.JSON(http.StatusOK, gin.H{"message": "Curso eliminado correctamente"})
 }
 
@@ -172,6 +180,7 @@ func (h *Handler) HandleCreateModule(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.ModuleCreate, "course_modules", "Módulo %s creado en el curso %s", mod.ID, courseID)
 	c.JSON(http.StatusCreated, mod)
 }
 
@@ -189,6 +198,7 @@ func (h *Handler) HandleUpdateModule(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.ModuleUpdate, "course_modules", "Módulo actualizado: %s", moduleID)
 	c.JSON(http.StatusOK, mod)
 }
 
@@ -199,6 +209,7 @@ func (h *Handler) HandleDeleteModule(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.ModuleDelete, "course_modules", "Módulo eliminado: %s", moduleID)
 	c.JSON(http.StatusOK, gin.H{"message": "Módulo eliminado correctamente"})
 }
 
@@ -218,6 +229,7 @@ func (h *Handler) HandleCreateLesson(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.LessonCreate, "lessons", "Lección %s creada en el módulo %s", lesson.ID, moduleID)
 	c.JSON(http.StatusCreated, lesson)
 }
 
@@ -235,6 +247,7 @@ func (h *Handler) HandleUpdateLesson(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.LessonUpdate, "lessons", "Lección actualizada: %s", lessonID)
 	c.JSON(http.StatusOK, lesson)
 }
 
@@ -245,6 +258,7 @@ func (h *Handler) HandleDeleteLesson(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.LessonDelete, "lessons", "Lección eliminada: %s", lessonID)
 	c.JSON(http.StatusOK, gin.H{"message": "Lección eliminada correctamente"})
 }
 
@@ -266,6 +280,7 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.FileUpload, "uploads", "Archivo subido: %s (%d bytes) como %s", file.Filename, file.Size, url)
 	c.JSON(http.StatusOK, gin.H{
 		"url":      url,
 		"filename": file.Filename,
@@ -386,6 +401,9 @@ func (h *Handler) HandleCleanupUploads(c *gin.Context) {
 	var total int64
 	for _, o := range orphans {
 		total += o.SizeBytes
+	}
+	if apply {
+		audit.Record(h.svc.db, c, audit.UploadsCleanup, "uploads", "Limpieza de archivos huérfanos: %d archivos, %d bytes", len(orphans), total)
 	}
 	c.JSON(http.StatusOK, gin.H{"dryRun": !apply, "count": len(orphans), "totalBytes": total, "files": orphans})
 }

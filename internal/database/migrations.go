@@ -25,6 +25,18 @@ var migrations = []migration{
 		return addColumnIfMissing(tx, "users", "token_version", "INTEGER NOT NULL DEFAULT 0")
 	}},
 	{3, "performance_indexes", migratePerformanceIndexes},
+	{4, "account_lockout_and_audit_request_id", func(tx *sql.Tx) error {
+		for _, c := range []struct{ table, column, def string }{
+			{"users", "failed_login_attempts", "INTEGER NOT NULL DEFAULT 0"},
+			{"users", "locked_until", "DATETIME"},
+			{"audit_logs", "request_id", "TEXT"},
+		} {
+			if err := addColumnIfMissing(tx, c.table, c.column, c.def); err != nil {
+				return err
+			}
+		}
+		return nil
+	}},
 }
 
 func migrate(db *sql.DB) error {

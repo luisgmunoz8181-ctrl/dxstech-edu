@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/audit"
 	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/database"
 
@@ -182,6 +183,7 @@ func (s *Service) Generate(c *gin.Context) {
 		_, _ = s.db.Exec(`UPDATE lessons SET quiz_id = ?, content_type = 'quiz', updated_at = ? WHERE id = ?`, quizID, now, req.LessonID)
 	}
 
+	audit.Record(s.db, c, audit.QuizGenerate, "quizzes", "Evaluación generada con IA: %s (%s, %d preguntas)", req.Title, quizID, len(questions))
 	c.JSON(http.StatusCreated, QuizDetail{
 		ID:            quizID,
 		Title:         req.Title,
@@ -265,6 +267,7 @@ func (s *Service) GenerateForLesson(c *gin.Context) {
 		UPDATE lessons SET quiz_id = ?, content_type = 'quiz', updated_at = ? WHERE id = ?
 	`, quizID, now, req.LessonID)
 
+	audit.Record(s.db, c, audit.QuizGenerate, "quizzes", "Evaluación generada con IA para la lección %s (%s, %d preguntas)", req.LessonID, quizID, len(questions))
 	c.JSON(http.StatusCreated, QuizDetail{
 		ID:            quizID,
 		Title:         "Evaluación: " + title,
@@ -501,5 +504,6 @@ func (s *Service) Delete(c *gin.Context) {
 		return
 	}
 
+	audit.Record(s.db, c, audit.QuizDelete, "quizzes", "Evaluación eliminada: %s", id)
 	c.JSON(http.StatusOK, gin.H{"message": "Evaluación eliminada correctamente", "id": id})
 }

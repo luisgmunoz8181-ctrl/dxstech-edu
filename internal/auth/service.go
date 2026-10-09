@@ -22,6 +22,25 @@ type Service struct {
 	cfg *config.Config
 }
 
+const (
+	// Tras maxFailedAttempts contraseñas incorrectas seguidas, la cuenta se
+	// bloquea lockDuration (además del límite por IP).
+	maxFailedAttempts = 5
+	lockDuration      = 15 * time.Minute
+)
+
+// LockedError indica que la cuenta está bloqueada temporalmente.
+type LockedError struct{ Until time.Time }
+
+func (e *LockedError) Error() string {
+	mins := int(time.Until(e.Until).Minutes()) + 1
+	return fmt.Sprintf("cuenta bloqueada temporalmente por intentos fallidos. Intenta de nuevo en %d min o restablece tu contraseña", mins)
+}
+
+// dummyHash permite igualar el tiempo de respuesta cuando el correo no existe,
+// evitando enumerar usuarios por diferencia de latencia.
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dxstech-timing-equalizer"), bcrypt.DefaultCost)
+
 func NewService(db *database.DB, cfg *config.Config) *Service {
 	return &Service{
 		db:  db,
@@ -39,25 +58,26 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP, userAge
 		SELECT u.id, u.first_name, u.last_name, u.email, u.password_hash, u.role_id,
 		       r.name as role_name, u.status, u.email_verified, u.must_change_password,
 		       u.identification, u.company, u.job_title, u.last_login, u.created_at, u.updated_at,
-		       u.token_version
+		       u.token_version, u.locked_until
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
 		WHERE lower(u.email) = ?
 	`, email)
 
 	var u User
-	var lastLogin sql.NullTime
+	var lastLogin, lockedUntil sql.NullTime
 	var iden, comp, job sql.NullString
 
 	err = row.Scan(
 		&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.PasswordHash, &u.RoleID,
 		&u.Role, &u.Status, &u.EmailVerified, &u.MustChangePassword,
 		&iden, &comp, &job, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
-		&u.TokenVersion,
+		&u.TokenVersion, &lockedUntil,
 	)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
 			s.LogAudit(nil, "LOGIN_FAILED", "auth", clientIP, userAgent, fmt.Sprintf("Usuario no encontrado: %s", email))
 			return nil, errors.New("correo electrónico o contraseña incorrectos")
 		}
@@ -77,9 +97,17 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP, userAge
 		u.LastLogin = &lastLogin.Time
 	}
 
+	// Cuenta bloqueada: se rechaza antes de comprobar la contraseña para que
+	// seguir adivinando no tenga efecto durante el bloqueo.
+	if lockedUntil.Valid && lockedUntil.Time.After(time.Now()) {
+		s.LogAudit(&u.ID, "LOGIN_BLOCKED", "auth", clientIP, userAgent, "Cuenta bloqueada temporalmente")
+		return nil, &LockedError{Until: lockedUntil.Time}
+	}
+
 	// Verify password hash
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)); err != nil {
 		s.LogAudit(&u.ID, "LOGIN_FAILED", "auth", clientIP, userAgent, "Contraseña incorrecta")
+		s.registerFailedAttempt(ctx, u.ID, clientIP, userAgent)
 		return nil, errors.New("correo electrónico o contraseña incorrectos")
 	}
 
@@ -102,7 +130,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP, userAge
 
 	// Update last_login
 	now := time.Now()
-	_, _ = s.db.ExecContext(ctx, `UPDATE users SET last_login = ? WHERE id = ?`, now, u.ID)
+	_, _ = s.db.ExecContext(ctx, `UPDATE users SET last_login = ?, failed_login_attempts = 0, locked_until = NULL WHERE id = ?`, now, u.ID)
 	u.LastLogin = &now
 
 	s.LogAudit(&u.ID, "LOGIN_SUCCESS", "auth", clientIP, userAgent, fmt.Sprintf("Inicio de sesión exitoso con rol %s", u.Role))
@@ -153,6 +181,34 @@ func (s *Service) GetMe(ctx context.Context, userID string) (*User, error) {
 	return &u, nil
 }
 
+// registerFailedAttempt suma un intento fallido y bloquea la cuenta al llegar al límite.
+func (s *Service) registerFailedAttempt(ctx context.Context, userID, clientIP, userAgent string) {
+	var attempts int
+	if err := s.db.QueryRowContext(ctx, `
+		UPDATE users SET failed_login_attempts = failed_login_attempts + 1 WHERE id = ?
+		RETURNING failed_login_attempts`, userID).Scan(&attempts); err != nil {
+		return
+	}
+	if attempts >= maxFailedAttempts {
+		until := time.Now().Add(lockDuration)
+		_, _ = s.db.ExecContext(ctx, `UPDATE users SET failed_login_attempts = 0, locked_until = ? WHERE id = ?`, until, userID)
+		s.LogAudit(&userID, "ACCOUNT_LOCKED", "auth", clientIP, userAgent, fmt.Sprintf("Bloqueo de %s tras %d intentos fallidos", lockDuration, maxFailedAttempts))
+	}
+}
+
+// UnlockUser levanta el bloqueo temporal de una cuenta (acción de administrador).
+func (s *Service) UnlockUser(ctx context.Context, adminID, targetID, clientIP, userAgent string) (*User, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return nil, errors.New("usuario no encontrado")
+	}
+	s.LogAudit(&adminID, "UNLOCK_USER", "users", clientIP, userAgent, fmt.Sprintf("Cuenta desbloqueada: %s", targetID))
+	return s.GetMe(ctx, targetID)
+}
+
 // IssueToken emite un token nuevo para un usuario ya autenticado (p. ej. tras
 // cambiar la contraseña, que invalida los tokens anteriores).
 func (s *Service) IssueToken(ctx context.Context, userID string, duration time.Duration) (string, error) {
@@ -167,18 +223,25 @@ func (s *Service) IssueToken(ctx context.Context, userID string, duration time.D
 }
 
 func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPassword, clientIP, userAgent string) error {
-	if err := ValidatePasswordPolicy(newPassword); err != nil {
-		return err
-	}
-
-	var currentHash string
-	err := s.db.QueryRowContext(ctx, `SELECT password_hash FROM users WHERE id = ?`, userID).Scan(&currentHash)
+	var currentHash, email, firstName, lastName string
+	var lockedUntil sql.NullTime
+	err := s.db.QueryRowContext(ctx, `SELECT password_hash, email, first_name, last_name, locked_until FROM users WHERE id = ?`, userID).
+		Scan(&currentHash, &email, &firstName, &lastName, &lockedUntil)
 	if err != nil {
 		return errors.New("usuario no encontrado")
+	}
+	if lockedUntil.Valid && lockedUntil.Time.After(time.Now()) {
+		return &LockedError{Until: lockedUntil.Time}
+	}
+
+	if err := ValidatePasswordPolicy(newPassword, email, firstName, lastName); err != nil {
+		return err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(currentHash), []byte(oldPassword)); err != nil {
 		s.LogAudit(&userID, "CHANGE_PASSWORD_FAILED", "users", clientIP, userAgent, "Contraseña actual incorrecta")
+		// Una sesión robada no puede adivinar la contraseña actual sin límite.
+		s.registerFailedAttempt(ctx, userID, clientIP, userAgent)
 		return errors.New("la contraseña actual no es correcta")
 	}
 
@@ -191,7 +254,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPa
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE users 
 		SET password_hash = ?, password_changed_at = ?, must_change_password = 0, updated_at = ?,
-		    token_version = token_version + 1
+		    token_version = token_version + 1, failed_login_attempts = 0, locked_until = NULL
 		WHERE id = ?
 	`, string(newHash), now, now, userID)
 	if err != nil {
@@ -266,6 +329,12 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword, clie
 		return errors.New("el enlace de restablecimiento ha expirado. Solicita uno nuevo")
 	}
 
+	var firstName, lastName string
+	_ = s.db.QueryRowContext(ctx, `SELECT first_name, last_name FROM users WHERE lower(email) = ?`, email).Scan(&firstName, &lastName)
+	if err := ValidatePasswordPolicy(newPassword, email, firstName, lastName); err != nil {
+		return err
+	}
+
 	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return errors.New("error procesando contraseña")
@@ -275,7 +344,7 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword, clie
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE users 
 		SET password_hash = ?, password_changed_at = ?, must_change_password = 0, updated_at = ?,
-		    token_version = token_version + 1
+		    token_version = token_version + 1, failed_login_attempts = 0, locked_until = NULL
 		WHERE lower(email) = ?
 	`, string(newHash), now, now, email)
 	if err != nil {
@@ -358,7 +427,7 @@ func (s *Service) CreateUser(ctx context.Context, adminID string, req CreateUser
 		return nil, err
 	}
 
-	if err := ValidatePasswordPolicy(req.Password); err != nil {
+	if err := ValidatePasswordPolicy(req.Password, email, req.FirstName, req.LastName); err != nil {
 		return nil, err
 	}
 

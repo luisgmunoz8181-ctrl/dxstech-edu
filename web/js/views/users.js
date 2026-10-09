@@ -240,7 +240,7 @@ export const UsersView = {
 
           <div>
             <label class="block text-[11px] font-semibold text-slate-700 mb-1">Contraseña Inicial *</label>
-            <input type="password" id="new-user-pass" required minlength="8" placeholder="Mínimo 8 caracteres (Mayús, minús, num)" class="w-full text-xs rounded-xl border border-slate-200 px-3 py-2">
+            <input type="password" id="new-user-pass" required minlength="10" placeholder="Mínimo 10 caracteres (Mayús, minús, núm.)" class="w-full text-xs rounded-xl border border-slate-200 px-3 py-2">
           </div>
 
           <div class="grid grid-cols-2 gap-3">

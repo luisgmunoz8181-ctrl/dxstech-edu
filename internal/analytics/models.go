@@ -24,17 +24,17 @@ type OverviewMetrics struct {
 
 // CourseMetric analítica granular por cada curso
 type CourseMetric struct {
-	CourseID        string  `json:"courseId"`
-	CourseCode      string  `json:"courseCode"`
-	CourseTitle     string  `json:"courseTitle"`
-	Category        string  `json:"category"`
-	Status          string  `json:"status"`
-	DurationHours   float64 `json:"durationHours"`
-	TotalStudents   int     `json:"totalStudents"`
-	ActiveStudents  int     `json:"activeStudents"`
-	CompletedStudents int   `json:"completedStudents"`
-	AverageProgress float64 `json:"averageProgress"`
-	CompletionRate  float64 `json:"completionRate"`
+	CourseID          string  `json:"courseId"`
+	CourseCode        string  `json:"courseCode"`
+	CourseTitle       string  `json:"courseTitle"`
+	Category          string  `json:"category"`
+	Status            string  `json:"status"`
+	DurationHours     float64 `json:"durationHours"`
+	TotalStudents     int     `json:"totalStudents"`
+	ActiveStudents    int     `json:"activeStudents"`
+	CompletedStudents int     `json:"completedStudents"`
+	AverageProgress   float64 `json:"averageProgress"`
+	CompletionRate    float64 `json:"completionRate"`
 }
 
 // TimelinePoint registro mensual para gráficos de tendencias
@@ -63,12 +63,12 @@ type StudentMonitoringRow struct {
 
 // FilterOptions parámetros de filtrado para métricas y monitoreo
 type FilterOptions struct {
-	CourseID   string
-	Category   string
-	Status     string
-	Search     string
-	StartDate  string
-	EndDate    string
-	Limit      int
-	Offset     int
+	CourseID  string
+	Category  string
+	Status    string
+	Search    string
+	StartDate string
+	EndDate   string
+	Limit     int
+	Offset    int
 }
