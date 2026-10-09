@@ -65,6 +65,8 @@ func Authenticate(secret string) gin.HandlerFunc {
 			c.Set("user", claims)
 			c.Set("userID", claims.UserID)
 			c.Set("userRole", claims.Role)
+			c.Set("userEmail", claims.Email)
+			c.Set("userName", strings.TrimSpace(claims.FirstName+" "+claims.LastName))
 		}
 
 		c.Next()

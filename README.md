@@ -10,8 +10,13 @@ Para instalar dependencias y levantar el servidor de desarrollo:
 
 ```bash
 pnpm install
-pnpm dev
+pnpm dev   # ejecuta el servidor con --dev (APP_ENV=development)
 ```
+
+> **Modo desarrollo vs. producción:** si no se define `APP_ENV`, el servidor asume **producción** y exige `JWT_SECRET`.
+> Solo en desarrollo (`--dev`) se siembran usuarios y cursos de demostración (`superadmin@dxstech.edu` / `Admin1234*`,
+> `estudiante@dxstech.edu` / `Student1234*`), se genera un secreto JWT efímero y el gateway de WhatsApp queda sin autenticación.
+> **Nunca expongas una instancia `--dev` a internet.**
 
 La aplicación estará lista y accesible en su navegador:
 
@@ -131,6 +136,10 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 | `PORT` | `3000` | Puerto interno en el que escucha Gin |
 | `HOST` | `0.0.0.0` | Permite conexiones externas en el contenedor |
 | `DATA_DIR` | `/app/data` | Ruta donde se almacena SQLite persistente |
+| `JWT_SECRET` | *(obligatorio)* | Secreto de sesión, mínimo 32 caracteres (`openssl rand -hex 32`). El servidor no arranca en producción sin él |
+| `APP_URL` | `https://edu.tuempresa.com` | URL pública (CORS y enlaces de verificación) |
+| `CORS_ORIGINS` | *(vacío)* | Orígenes extra permitidos con credenciales, separados por coma |
+| `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` | opcional | Primer SUPERADMIN. Sin contraseña se genera una aleatoria y se imprime una sola vez en el log; debe cambiarse al ingresar |
 
 ### Paso 5: Dominio y SSL
 1. Asigna tu dominio en Coolify (por ejemplo `https://edu.tuempresa.com`).

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/database"
 
 	"github.com/gin-gonic/gin"
@@ -99,13 +100,35 @@ func NewService(db *database.DB, gemini *ai.GeminiClient, completer LessonComple
 }
 
 func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
-	r.POST("/generate", s.Generate)
-	r.POST("/generate-for-lesson", s.GenerateForLesson)
-	r.GET("/lesson/:lessonId", s.GetByLesson)
-	r.POST("/:id/submit", s.Submit)
-	r.GET("", s.List)
-	r.GET("/:id", s.GetByID)
-	r.DELETE("/:id", s.Delete)
+	admin := auth.RequireRole("SUPERADMIN", "ADMINISTRADOR")
+
+	// Gestión (solo administradores)
+	r.POST("/generate", admin, s.Generate)
+	r.POST("/generate-for-lesson", admin, s.GenerateForLesson)
+	r.GET("", admin, s.List)
+	r.DELETE("/:id", admin, s.Delete)
+
+	// Consumo por estudiantes (requiere sesión)
+	r.GET("/lesson/:lessonId", auth.RequireAuth(), s.GetByLesson)
+	r.POST("/:id/submit", auth.RequireAuth(), s.Submit)
+	r.GET("/:id", auth.RequireAuth(), s.GetByID)
+}
+
+func isAdminRole(c *gin.Context) bool {
+	role := c.GetString("userRole")
+	return role == "SUPERADMIN" || role == "ADMINISTRADOR"
+}
+
+// redactAnswers elimina la clave de respuesta de las preguntas para que los
+// estudiantes no puedan leerla antes de enviar su intento. El resultado
+// correcto solo se devuelve en la retroalimentación de Submit.
+func redactAnswers(questions []ai.QuizQuestion) []ai.QuizQuestion {
+	out := make([]ai.QuizQuestion, len(questions))
+	for i, q := range questions {
+		q.CorrectAnswer = ""
+		out[i] = q
+	}
+	return out
 }
 
 func (s *Service) Generate(c *gin.Context) {
@@ -256,7 +279,7 @@ func (s *Service) GenerateForLesson(c *gin.Context) {
 
 func (s *Service) Submit(c *gin.Context) {
 	quizID := c.Param("id")
-	userID := c.GetString("userId")
+	userID := c.GetString("userID")
 
 	var req SubmitQuizRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -350,7 +373,7 @@ func (s *Service) Submit(c *gin.Context) {
 
 func (s *Service) GetByLesson(c *gin.Context) {
 	lessonID := c.Param("lessonId")
-	userID := c.GetString("userId")
+	userID := c.GetString("userID")
 
 	var q QuizDetail
 	var questionsJSON string
@@ -389,6 +412,10 @@ func (s *Service) GetByLesson(c *gin.Context) {
 		}
 	}
 
+	if !isAdminRole(c) {
+		q.Questions = redactAnswers(q.Questions)
+	}
+
 	c.JSON(http.StatusOK, q)
 }
 
@@ -417,7 +444,7 @@ func (s *Service) List(c *gin.Context) {
 
 func (s *Service) GetByID(c *gin.Context) {
 	id := c.Param("id")
-	userID := c.GetString("userId")
+	userID := c.GetString("userID")
 
 	var q QuizDetail
 	var questionsJSON string
@@ -450,6 +477,10 @@ func (s *Service) GetByID(c *gin.Context) {
 			q.LatestScore = &sc
 		}
 		q.UserPassed = passedInt == 1
+	}
+
+	if !isAdminRole(c) {
+		q.Questions = redactAnswers(q.Questions)
 	}
 
 	c.JSON(http.StatusOK, q)

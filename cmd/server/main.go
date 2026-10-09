@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -36,7 +37,16 @@ func (q *quizEnrollmentCompleter) CompleteLesson(ctx context.Context, userID, co
 }
 
 func main() {
+	devFlag := flag.Bool("dev", false, "ejecuta en modo desarrollo (equivale a APP_ENV=development)")
+	flag.Parse()
+
 	cfg := config.Load()
+	if *devFlag {
+		cfg.AppEnv = "development"
+	}
+	if err := cfg.EnsureJWTSecret(); err != nil {
+		log.Fatalf("❌ Configuración de seguridad inválida: %v", err)
+	}
 
 	if !cfg.IsDevelopment() {
 		gin.SetMode(gin.ReleaseMode)
@@ -45,7 +55,7 @@ func main() {
 	}
 
 	// Initialize Database
-	db, err := database.InitDB(cfg.DataDir)
+	db, err := database.InitDB(cfg.DataDir, cfg.IsDevelopment())
 	if err != nil {
 		log.Fatalf("❌ Error crítico inicializando SQLite: %v", err)
 	}
@@ -72,7 +82,7 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(safeLoggerMiddleware())
-	r.Use(corsMiddleware())
+	r.Use(corsMiddleware(cfg.AllowedOrigins()))
 	r.Use(auth.Authenticate(cfg.JWTSecret))
 
 	// Set max multipart memory (25 MB)
@@ -164,12 +174,27 @@ func main() {
 	log.Println("✅ Servidor detenido correctamente.")
 }
 
-func corsMiddleware() gin.HandlerFunc {
+// corsMiddleware solo habilita CORS con credenciales para los orígenes
+// explícitamente autorizados. La SPA se sirve desde el mismo origen que la API,
+// por lo que las peticiones same-origin no necesitan estas cabeceras.
+func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
+	allowed := make(map[string]bool, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		allowed[o] = true
+	}
+
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Gemini-API-Key")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
+		origin := c.GetHeader("Origin")
+		if origin != "" {
+			c.Writer.Header().Add("Vary", "Origin")
+		}
+
+		if origin != "" && allowed[origin] {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+			c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-Gemini-API-Key")
+			c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
+		}
 
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)

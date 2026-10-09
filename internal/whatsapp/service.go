@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/database"
 
@@ -75,8 +76,8 @@ func NewService(db *database.DB, gemini *ai.GeminiClient, cfg *config.Config) *S
 }
 
 func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
-	// Public / Student AI Tutor endpoint
-	r.POST("/ask-tutor", s.AskTutor)
+	// Student AI Tutor endpoint (requiere sesión iniciada)
+	r.POST("/ask-tutor", auth.RequireAuth(), s.AskTutor)
 
 	// Admin protected endpoints
 	admin := r.Group("")
@@ -92,35 +93,17 @@ func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
 	}
 }
 
+// productionAuthMiddleware protege el gateway de WhatsApp. En desarrollo
+// (--dev / APP_ENV=development) el acceso es libre para facilitar las pruebas
+// locales; en cualquier otro entorno exige sesión de SUPERADMIN o ADMINISTRADOR.
 func (s *Service) productionAuthMiddleware() gin.HandlerFunc {
+	requireAdmin := auth.RequireRole("SUPERADMIN", "ADMINISTRADOR")
 	return func(c *gin.Context) {
-		// IN DEVELOPMENT: completely free access, no auth required!
-		if s.cfg == nil || s.cfg.IsDevelopment() {
+		if s.cfg != nil && s.cfg.IsDevelopment() {
 			c.Next()
 			return
 		}
-
-		// Allow authenticated admins via JWT HttpOnly cookie or header
-		if role, exists := c.Get("userRole"); exists {
-			if roleStr, ok := role.(string); ok && (roleStr == "SUPERADMIN" || roleStr == "ADMINISTRADOR") {
-				c.Next()
-				return
-			}
-		}
-
-		// IN PRODUCTION: require admin authorization
-		adminPass := "dxstech2026"
-		reqPass := c.GetHeader("X-Admin-Password")
-		user, pass, hasBasic := c.Request.BasicAuth()
-		if reqPass == adminPass || (hasBasic && (pass == adminPass || user == "admin" && pass == adminPass)) {
-			c.Next()
-			return
-		}
-
-		c.Header("WWW-Authenticate", `Basic realm="DxSTech Edu WhatsApp Admin"`)
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error": "Acceso protegido en producción. Ingrese con usuario administrador o proporcione credenciales de WhatsApp.",
-		})
+		requireAdmin(c)
 	}
 }
 

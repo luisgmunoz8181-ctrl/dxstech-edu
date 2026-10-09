@@ -171,6 +171,9 @@ class AppRouter {
       if (mobileDashBtn) mobileDashBtn.style.display = isAdmin ? 'flex' : 'none';
       if (usersNavBtn) usersNavBtn.style.display = isAdmin ? 'flex' : 'none';
       if (mobileUsersBtn) mobileUsersBtn.style.display = isAdmin ? 'flex' : 'none';
+      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"]').forEach((btn) => {
+        btn.style.display = isAdmin ? 'flex' : 'none';
+      });
     } else {
       if (userBtn) {
         userBtn.className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-all text-slate-700 shadow-2xs cursor-pointer';
@@ -192,6 +195,9 @@ class AppRouter {
       if (mobileDashBtn) mobileDashBtn.style.display = 'none';
       if (usersNavBtn) usersNavBtn.style.display = 'none';
       if (mobileUsersBtn) mobileUsersBtn.style.display = 'none';
+      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"]').forEach((btn) => {
+        btn.style.display = 'none';
+      });
     }
 
     if (window.lucide) {
@@ -203,7 +209,7 @@ class AppRouter {
     if (!this.views[viewId]) return;
 
     // RBAC Protection guards
-    if (viewId === 'dashboard' || viewId === 'users') {
+    if (viewId === 'dashboard' || viewId === 'users' || viewId === 'quizzes' || viewId === 'whatsapp') {
       if (!this.currentUser) {
         Toast.info('Inicia sesión con credenciales de administrador para acceder a este módulo.');
         this.navigate('login');

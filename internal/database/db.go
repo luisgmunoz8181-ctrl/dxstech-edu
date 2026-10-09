@@ -1,10 +1,14 @@
 package database
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
@@ -14,7 +18,13 @@ type DB struct {
 	*sql.DB
 }
 
-func InitDB(dataDir string) (*DB, error) {
+// InitDB abre la base de datos y aplica las migraciones.
+//
+// seedDemo controla si se siembran usuarios, cursos y matrículas de
+// demostración (con credenciales conocidas). Solo debe ser true en desarrollo
+// y tests. Con seedDemo=false, si la base está vacía se crea un único
+// SUPERADMIN inicial (ver bootstrapSuperadmin).
+func InitDB(dataDir string, seedDemo bool) (*DB, error) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
@@ -29,7 +39,7 @@ func InitDB(dataDir string) (*DB, error) {
 	// SQLite file databases require serialized write access to avoid SQLITE_BUSY / database is locked.
 	db.SetMaxOpenConns(1)
 
-	if err := runMigrations(db); err != nil {
+	if err := runMigrations(db, seedDemo); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("database migration failed: %w", err)
 	}
@@ -37,7 +47,7 @@ func InitDB(dataDir string) (*DB, error) {
 	return &DB{DB: db}, nil
 }
 
-func runMigrations(db *sql.DB) error {
+func runMigrations(db *sql.DB, seedDemo bool) error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS roles (
 		id INTEGER PRIMARY KEY,
@@ -271,6 +281,10 @@ func runMigrations(db *sql.DB) error {
 	`
 	_, _ = db.Exec(phase6Schema)
 
+	if !seedDemo {
+		return bootstrapSuperadmin(db)
+	}
+
 	if err := seedDefaultUsers(db); err != nil {
 		return err
 	}
@@ -280,6 +294,57 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	return seedDemoEnrollments(db)
+}
+
+// bootstrapSuperadmin crea el primer SUPERADMIN cuando no existe ningún usuario.
+//
+// Credenciales: BOOTSTRAP_ADMIN_EMAIL (por defecto superadmin@dxstech.edu) y
+// BOOTSTRAP_ADMIN_PASSWORD. Si no se define contraseña, se genera una aleatoria
+// que se imprime una única vez en el log. En ambos casos el usuario queda con
+// must_change_password=1.
+func bootstrapSuperadmin(db *sql.DB) error {
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	email := strings.ToLower(strings.TrimSpace(os.Getenv("BOOTSTRAP_ADMIN_EMAIL")))
+	if email == "" {
+		email = "superadmin@dxstech.edu"
+	}
+
+	password := os.Getenv("BOOTSTRAP_ADMIN_PASSWORD")
+	generated := false
+	if password == "" {
+		b := make([]byte, 18)
+		if _, err := rand.Read(b); err != nil {
+			return err
+		}
+		password = base64.RawURLEncoding.EncodeToString(b)
+		generated = true
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO users (id, first_name, last_name, email, password_hash, role_id, status, email_verified, must_change_password)
+		VALUES ('usr-superadmin-01', 'Super', 'Admin', ?, ?, 1, 'active', 1, 1)
+	`, email, string(hash))
+	if err != nil {
+		return err
+	}
+
+	log.Printf("🔐 Se creó el SUPERADMIN inicial: %s", email)
+	if generated {
+		log.Printf("🔐 Contraseña temporal (se muestra una sola vez, cámbiela al ingresar): %s", password)
+	}
+	return nil
 }
 
 func seedDefaultUsers(db *sql.DB) error {

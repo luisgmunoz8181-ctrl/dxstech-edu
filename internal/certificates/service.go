@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/database"
 
 	"github.com/gin-gonic/gin"
@@ -66,13 +67,16 @@ func NewService(db *database.DB) *Service {
 
 func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
 	// Generador Masivo (Retrocompatibilidad total)
-	r.POST("/generate", s.GenerateCertificates)
+	admin := auth.RequireRole("SUPERADMIN", "ADMINISTRADOR")
+	r.POST("/generate", admin, s.GenerateCertificates)
+	r.GET("/issued", admin, s.ListIssuedCertificates)
+
+	// Verificación pública (la consulta por código QR no requiere sesión)
 	r.GET("/verify/:id", s.VerifyCertificate)
-	r.GET("/issued", s.ListIssuedCertificates)
 
 	// Endpoints Oficiales LMS Fase 4
-	r.GET("/my-certificates", s.MyCertificates)
-	r.GET("/course/:courseId", s.GetCourseCertificate)
+	r.GET("/my-certificates", auth.RequireAuth(), s.MyCertificates)
+	r.GET("/course/:courseId", auth.RequireAuth(), s.GetCourseCertificate)
 	r.GET("/:id/pdf", s.DownloadCertificatePDF)
 	r.GET("/download/:id", s.DownloadCertificatePDF)
 }

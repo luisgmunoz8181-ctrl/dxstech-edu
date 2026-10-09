@@ -284,8 +284,8 @@ func (h *Handler) HandleGetDiscussions(c *gin.Context) {
 
 func (h *Handler) HandleCreateDiscussion(c *gin.Context) {
 	courseID := c.Param("id")
-	userID := c.GetString("userId")
-	userName := c.GetString("userEmail")
+	userID := c.GetString("userID")
+	userName := c.GetString("userName")
 	userRole := c.GetString("userRole")
 
 	var req CreateDiscussionRequest
@@ -317,8 +317,8 @@ func (h *Handler) HandleGetReviews(c *gin.Context) {
 
 func (h *Handler) HandleCreateReview(c *gin.Context) {
 	courseID := c.Param("id")
-	userID := c.GetString("userId")
-	userName := c.GetString("userEmail")
+	userID := c.GetString("userID")
+	userName := c.GetString("userName")
 
 	var req CreateReviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
