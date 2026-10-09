@@ -1,6 +1,7 @@
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
 import { Loading } from '../components/loading.js';
+import { esc } from '../utils/escape.js';
 
 export const WhatsAppView = {
   state: {
@@ -714,7 +715,7 @@ Certificados: Al aprobar con 60% o más, se emite un certificado digital en PDF 
       const status = `"${(l.status || '').replace(/"/g, '""')}"`;
       const errorDetail = `"${(l.errorDetail || '').replace(/"/g, '""')}"`;
       const date = `"${new Date(l.createdAt).toLocaleString('es-CO')}"`;
-      csvContent += `${id},${recipient},${message},${status},${errorDetail},${date}\r\n`;
+      csvContent += `${esc(id)},${esc(recipient)},${esc(message)},${status},${esc(errorDetail)},${esc(date)}\r\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

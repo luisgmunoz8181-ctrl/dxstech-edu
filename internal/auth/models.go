@@ -33,6 +33,7 @@ type User struct {
 	CreatedAt          time.Time  `json:"createdAt"`
 	UpdatedAt          time.Time  `json:"updatedAt"`
 	PasswordChangedAt  *time.Time `json:"passwordChangedAt,omitempty"`
+	TokenVersion       int        `json:"-"`
 }
 
 type LoginRequest struct {

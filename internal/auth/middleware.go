@@ -1,13 +1,50 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"dxstech-edu/internal/database"
+
 	"github.com/gin-gonic/gin"
 )
+
+// SessionState es el estado vigente de un usuario en base de datos.
+type SessionState struct {
+	Active             bool
+	TokenVersion       int
+	MustChangePassword bool
+}
+
+// SessionLookup consulta el estado actual de un usuario. Devuelve ok=false si
+// el usuario no existe.
+type SessionLookup func(ctx context.Context, userID string) (state SessionState, ok bool)
+
+// NewSessionLookup crea un SessionLookup respaldado por la base de datos.
+func NewSessionLookup(db *database.DB) SessionLookup {
+	return func(ctx context.Context, userID string) (SessionState, bool) {
+		var status string
+		var tv, must int
+		err := db.QueryRowContext(ctx,
+			`SELECT status, token_version, must_change_password FROM users WHERE id = ?`, userID,
+		).Scan(&status, &tv, &must)
+		if err != nil {
+			return SessionState{}, false
+		}
+		return SessionState{Active: status == "active", TokenVersion: tv, MustChangePassword: must == 1}, true
+	}
+}
+
+// passwordChangeAllowedPaths son las únicas rutas disponibles mientras el
+// usuario tenga must_change_password=1.
+var passwordChangeAllowedPaths = map[string]bool{
+	"/api/auth/me":              true,
+	"/api/auth/change-password": true,
+	"/api/auth/logout":          true,
+}
 
 const AuthCookieName = "dxstech_session"
 
@@ -37,8 +74,12 @@ func ClearAuthCookie(c *gin.Context, isProd bool) {
 	)
 }
 
-// Authenticate extracts and validates token from cookie or Authorization header
-func Authenticate(secret string) gin.HandlerFunc {
+// Authenticate extracts and validates token from cookie or Authorization header.
+//
+// Si se proporciona un SessionLookup, además de la firma se comprueba contra la
+// base de datos que el usuario siga activo y que la versión del token no haya
+// sido revocada (cambio de contraseña, de rol o desactivación).
+func Authenticate(secret string, lookups ...SessionLookup) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var tokenStr string
 
@@ -61,6 +102,14 @@ func Authenticate(secret string) gin.HandlerFunc {
 		}
 
 		claims, err := ValidateToken(tokenStr, secret)
+		if err == nil && claims != nil && len(lookups) > 0 && lookups[0] != nil {
+			state, ok := lookups[0](c.Request.Context(), claims.UserID)
+			if !ok || !state.Active || state.TokenVersion != claims.TokenVersion {
+				claims = nil // sesión revocada: se trata como anónimo
+			} else if state.MustChangePassword {
+				c.Set("mustChangePassword", true)
+			}
+		}
 		if err == nil && claims != nil {
 			c.Set("user", claims)
 			c.Set("userID", claims.UserID)
@@ -73,6 +122,17 @@ func Authenticate(secret string) gin.HandlerFunc {
 	}
 }
 
+func abortIfPasswordChangeRequired(c *gin.Context) bool {
+	if c.GetBool("mustChangePassword") && !passwordChangeAllowedPaths[c.Request.URL.Path] {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "Debe cambiar su contraseña temporal antes de continuar",
+			"code":  "PASSWORD_CHANGE_REQUIRED",
+		})
+		return true
+	}
+	return false
+}
+
 // RequireAuth enforces authenticated access
 func RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -81,6 +141,9 @@ func RequireAuth() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "Debe iniciar sesión para acceder a este recurso",
 			})
+			return
+		}
+		if abortIfPasswordChangeRequired(c) {
 			return
 		}
 		c.Next()
@@ -103,6 +166,10 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error": "Sesión inválida",
 			})
+			return
+		}
+
+		if abortIfPasswordChangeRequired(c) {
 			return
 		}
 

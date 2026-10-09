@@ -1,6 +1,7 @@
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
 import { Loading } from '../components/loading.js';
+import { esc } from '../utils/escape.js';
 
 export const UsersView = {
   users: [],
@@ -36,7 +37,7 @@ export const UsersView = {
             <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <i data-lucide="search" class="w-4 h-4"></i>
             </span>
-            <input type="text" id="user-search-input" value="${this.search}" placeholder="Buscar por nombre, correo..." class="w-full text-xs rounded-xl border border-slate-200 pl-9 pr-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
+            <input type="text" id="user-search-input" value="${esc(this.search)}" placeholder="Buscar por nombre, correo..." class="w-full text-xs rounded-xl border border-slate-200 pl-9 pr-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
           </div>
 
           <div class="flex items-center gap-2 w-full sm:w-auto">
@@ -150,7 +151,7 @@ export const UsersView = {
         SUPERADMIN: '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">Superadmin</span>',
         ADMINISTRADOR: '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">Administrador</span>',
         ESTUDIANTE: '<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Estudiante</span>',
-      }[u.role] || `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">${u.role}</span>`;
+      }[u.role] || `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">${esc(u.role)}</span>`;
 
       const statusBadge = u.status === 'active'
         ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Activo</span>'
@@ -163,23 +164,23 @@ export const UsersView = {
           <td class="py-3 px-5">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">
-                ${u.firstName.charAt(0)}${u.lastName.charAt(0)}
+                ${esc(u.firstName.charAt(0))}${esc(u.lastName.charAt(0))}
               </div>
               <div>
-                <p class="font-bold text-slate-800">${u.firstName} ${u.lastName}</p>
-                <p class="text-[11px] text-slate-400">${u.email}</p>
+                <p class="font-bold text-slate-800">${esc(u.firstName)} ${esc(u.lastName)}</p>
+                <p class="text-[11px] text-slate-400">${esc(u.email)}</p>
               </div>
             </div>
           </td>
           <td class="py-3 px-4">${roleBadge}</td>
           <td class="py-3 px-4">${statusBadge}</td>
           <td class="py-3 px-4 text-slate-600">
-            <p class="font-medium">${u.company || '—'}</p>
-            <p class="text-[10px] text-slate-400">${u.jobTitle || ''}</p>
+            <p class="font-medium">${esc(u.company || '—')}</p>
+            <p class="text-[10px] text-slate-400">${esc(u.jobTitle || '')}</p>
           </td>
           <td class="py-3 px-4 text-slate-500 text-[11px]">${lastLoginText}</td>
           <td class="py-3 px-5 text-right">
-            <button data-toggle-id="${u.id}" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${u.status === 'active' ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'} transition-colors">
+            <button data-toggle-id="${esc(u.id)}" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${u.status === 'active' ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'} transition-colors">
               ${u.status === 'active' ? 'Desactivar' : 'Activar'}
             </button>
           </td>

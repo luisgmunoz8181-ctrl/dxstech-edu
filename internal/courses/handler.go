@@ -20,7 +20,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	// Public / All Authenticated users
 	r.GET("", h.HandleListCourses)
 	r.GET("/:id", h.HandleGetCourse)
-	r.GET("/:id/discussions", h.HandleGetDiscussions)
+	r.GET("/:id/discussions", auth.RequireAuth(), h.HandleGetDiscussions)
 	r.POST("/:id/discussions", auth.RequireAuth(), h.HandleCreateDiscussion)
 	r.GET("/:id/reviews", h.HandleGetReviews)
 	r.POST("/:id/reviews", auth.RequireAuth(), h.HandleCreateReview)
@@ -249,9 +249,12 @@ func (h *Handler) HandleDeleteLesson(c *gin.Context) {
 // Upload Handler
 
 func (h *Handler) HandleUpload(c *gin.Context) {
+	// Corta la lectura del cuerpo más allá del límite (+1 MB de margen multipart).
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBytes+1<<20)
+
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Debe adjuntar un archivo en el campo 'file'"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Debe adjuntar un archivo en el campo 'file' (máx. 25 MB)"})
 		return
 	}
 
@@ -270,8 +273,20 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 
 // Discussions Handlers
 
+// requireCourseAccess responde 403 si el usuario no es admin ni está matriculado.
+func (h *Handler) requireCourseAccess(c *gin.Context, courseID string) bool {
+	if h.svc.db.UserCanAccessCourse(c.Request.Context(), c.GetString("userID"), c.GetString("userRole"), courseID) {
+		return true
+	}
+	c.JSON(http.StatusForbidden, gin.H{"error": "Debes estar matriculado en este curso para acceder a esta función"})
+	return false
+}
+
 func (h *Handler) HandleGetDiscussions(c *gin.Context) {
 	courseID := c.Param("id")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
 	lessonID := c.Query("lessonId")
 
 	list, err := h.svc.GetDiscussions(c.Request.Context(), courseID, lessonID)
@@ -284,6 +299,9 @@ func (h *Handler) HandleGetDiscussions(c *gin.Context) {
 
 func (h *Handler) HandleCreateDiscussion(c *gin.Context) {
 	courseID := c.Param("id")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
 	userID := c.GetString("userID")
 	userName := c.GetString("userName")
 	userRole := c.GetString("userRole")
@@ -317,6 +335,9 @@ func (h *Handler) HandleGetReviews(c *gin.Context) {
 
 func (h *Handler) HandleCreateReview(c *gin.Context) {
 	courseID := c.Param("id")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
 	userID := c.GetString("userID")
 	userName := c.GetString("userName")
 
@@ -336,6 +357,9 @@ func (h *Handler) HandleCreateReview(c *gin.Context) {
 
 func (h *Handler) HandleGetTutorContext(c *gin.Context) {
 	courseID := c.Param("id")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
 	tutorCtx, err := h.svc.GetCourseSummaryContext(c.Request.Context(), courseID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

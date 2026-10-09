@@ -57,3 +57,18 @@ func TestAllowedOrigins(t *testing.T) {
 		t.Fatalf("AllowedOrigins = %v, quería %v", got, want)
 	}
 }
+
+func TestTrustedProxiesConfig(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "")
+	if got := config.Load().TrustedProxies; len(got) == 0 {
+		t.Fatalf("por defecto deben confiarse los rangos privados")
+	}
+	t.Setenv("TRUSTED_PROXIES", "none")
+	if got := config.Load().TrustedProxies; len(got) != 0 {
+		t.Fatalf("'none' no debe confiar en ningún proxy, obtuvo %v", got)
+	}
+	t.Setenv("TRUSTED_PROXIES", "203.0.113.0/24, 198.51.100.7")
+	if got := config.Load().TrustedProxies; len(got) != 2 {
+		t.Fatalf("lista personalizada mal parseada: %v", got)
+	}
+}

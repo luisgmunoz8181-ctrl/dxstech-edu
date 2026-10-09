@@ -415,6 +415,11 @@ func (s *Service) AskTutor(c *gin.Context) {
 		apiKey = c.GetHeader("X-Gemini-API-Key")
 	}
 
+	if req.CourseID != "" && !s.db.UserCanAccessCourse(c.Request.Context(), c.GetString("userID"), c.GetString("userRole"), req.CourseID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Debes estar matriculado en este curso para consultar al tutor"})
+		return
+	}
+
 	// Build course context
 	contextInfo := "DxSTech Edu - Formación en Tecnología e Inteligencia Artificial."
 	if req.CourseID != "" {

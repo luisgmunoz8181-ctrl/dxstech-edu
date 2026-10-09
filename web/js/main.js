@@ -9,6 +9,7 @@ import { WhatsAppView } from './views/whatsapp.js';
 import { SettingsView } from './views/settings.js';
 import { Modal } from './components/modal.js';
 import { Toast } from './components/toast.js';
+import { esc } from './utils/escape.js';
 
 class AppRouter {
   constructor() {
@@ -142,7 +143,7 @@ class AppRouter {
 
     if (this.currentUser) {
       const initials = `${(this.currentUser.firstName || 'U').charAt(0)}${(this.currentUser.lastName || '').charAt(0)}`.toUpperCase();
-      const fullName = `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+      const fullName = `${esc(this.currentUser.firstName)} ${esc(this.currentUser.lastName)}`;
       const roleBadge = this.currentUser.role;
 
       if (userBtn) {
@@ -152,7 +153,7 @@ class AppRouter {
             ${initials}
           </span>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-bold text-slate-800">${fullName}</span>
+            <span class="text-xs font-bold text-slate-800">${esc(fullName)}</span>
             <span class="text-[9px] font-semibold text-indigo-600 uppercase tracking-wider">${roleBadge}</span>
           </div>
           <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
@@ -207,6 +208,13 @@ class AppRouter {
 
   navigate(viewId) {
     if (!this.views[viewId]) return;
+
+    // Contraseña temporal: el servidor bloquea la API; aquí se dirige al usuario al cambio.
+    if (this.currentUser?.mustChangePassword && viewId !== 'profile' && viewId !== 'login') {
+      Toast.warning('Debes cambiar tu contraseña temporal antes de continuar.');
+      this.navigate('profile');
+      return;
+    }
 
     // RBAC Protection guards
     if (viewId === 'dashboard' || viewId === 'users' || viewId === 'quizzes' || viewId === 'whatsapp') {
@@ -350,7 +358,7 @@ class AppRouter {
     `;
 
     try {
-      const res = await fetch(`/api/certificates/verify/${certId}`);
+      const res = await fetch(`/api/certificates/verify/${encodeURIComponent(certId)}`);
       const data = await res.json();
 
       if (res.ok && data.valid) {
@@ -366,19 +374,19 @@ class AppRouter {
                 <span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 mb-2">
                   ✓ Certificado Oficial Auténtico
                 </span>
-                <h3 class="text-xl font-black text-slate-900 leading-tight">${c.studentName}</h3>
+                <h3 class="text-xl font-black text-slate-900 leading-tight">${esc(c.studentName)}</h3>
                 <p class="text-xs text-slate-500 mt-1">ha acreditado satisfactoriamente los requisitos académicos de:</p>
-                <p class="text-sm font-bold text-indigo-700 mt-1">${c.courseTitle}</p>
+                <p class="text-sm font-bold text-indigo-700 mt-1">${esc(c.courseTitle)}</p>
               </div>
 
               <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 text-left space-y-2 text-xs">
                 <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                   <span class="text-slate-400 font-medium">Código de Registro:</span>
-                  <span class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">${c.id}</span>
+                  <span class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">${esc(c.id)}</span>
                 </div>
                 <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                   <span class="text-slate-400 font-medium">Fecha de Emisión:</span>
-                  <span class="font-semibold text-slate-700">${c.issueDate}</span>
+                  <span class="font-semibold text-slate-700">${esc(c.issueDate)}</span>
                 </div>
                 ${c.durationHours ? `
                   <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
@@ -389,7 +397,7 @@ class AppRouter {
                 ${c.instructorName ? `
                   <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                     <span class="text-slate-400 font-medium">Docente / Director:</span>
-                    <span class="font-semibold text-slate-700">${c.instructorName}</span>
+                    <span class="font-semibold text-slate-700">${esc(c.instructorName)}</span>
                   </div>
                 ` : ''}
                 <div class="flex justify-between items-center py-1">
@@ -399,7 +407,7 @@ class AppRouter {
               </div>
 
               <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5">
-                <a href="/api/certificates/${c.id}/pdf" target="_blank" download="Certificado_${c.id}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
+                <a href="/api/certificates/${esc(c.id)}/pdf" target="_blank" download="Certificado_${esc(c.id)}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
                   <i data-lucide="download" class="w-4 h-4"></i>
                   <span>Descargar Diploma Oficial (PDF)</span>
                 </a>
@@ -441,7 +449,7 @@ class AppRouter {
                 </span>
                 <h3 class="text-lg font-bold text-slate-900">No se pudo verificar el documento</h3>
                 <p class="text-xs text-slate-500 mt-2 max-w-sm mx-auto">
-                  El código <code class="font-mono font-bold text-slate-700 bg-slate-100 px-1 py-0.5 rounded">${certId || 'N/A'}</code> no figura en la base de datos oficial de certificaciones emitidas por DxSTech Edu.
+                  El código <code class="font-mono font-bold text-slate-700 bg-slate-100 px-1 py-0.5 rounded">${esc(certId || 'N/A')}</code> no figura en la base de datos oficial de certificaciones emitidas por DxSTech Edu.
                 </p>
               </div>
 
@@ -455,7 +463,7 @@ class AppRouter {
         `;
       }
     } catch (e) {
-      mainContainer.innerHTML = `<div class="p-6 text-xs text-rose-600 bg-rose-50 rounded-2xl max-w-md mx-auto text-center">Error de red verificando certificado: ${e.message}</div>`;
+      mainContainer.innerHTML = `<div class="p-6 text-xs text-rose-600 bg-rose-50 rounded-2xl max-w-md mx-auto text-center">Error de red verificando certificado: ${esc(e.message)}</div>`;
     }
 
     if (window.lucide) window.lucide.createIcons();

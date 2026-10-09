@@ -1,5 +1,6 @@
 import { Toast } from '../components/toast.js';
 import { Loading } from '../components/loading.js';
+import { esc } from '../utils/escape.js';
 
 export const CertificatesView = {
   // View State
@@ -496,11 +497,11 @@ export const CertificatesView = {
             </div>
 
             <div>
-              <span class="text-[11px] font-mono font-bold text-slate-400">${c.id}</span>
+              <span class="text-[11px] font-mono font-bold text-slate-400">${esc(c.id)}</span>
               <h4 class="text-base font-bold text-slate-900 leading-snug mt-1 group-hover:text-indigo-600 transition-colors">
-                ${c.courseTitle}
+                ${esc(c.courseTitle)}
               </h4>
-              <p class="text-xs text-slate-500 mt-1">Acreditado a: <strong class="text-slate-700 font-semibold">${c.studentName}</strong></p>
+              <p class="text-xs text-slate-500 mt-1">Acreditado a: <strong class="text-slate-700 font-semibold">${esc(c.studentName)}</strong></p>
             </div>
 
             <div class="bg-slate-50 rounded-xl p-3 border border-slate-200/60 text-[11px] space-y-1.5 text-slate-600">
@@ -510,21 +511,21 @@ export const CertificatesView = {
               </div>
               <div class="flex justify-between">
                 <span class="text-slate-400">Fecha de Emisión:</span>
-                <span class="font-semibold text-slate-800">${c.issueDate}</span>
+                <span class="font-semibold text-slate-800">${esc(c.issueDate)}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-slate-400">Docente / Director:</span>
-                <span class="font-semibold text-indigo-600">${c.instructorName || 'DxSTech Edu'}</span>
+                <span class="font-semibold text-indigo-600">${esc(c.instructorName || 'DxSTech Edu')}</span>
               </div>
             </div>
           </div>
 
           <div class="pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 mt-4">
-            <a href="/api/certificates/${c.id}/pdf" target="_blank" download="Certificado_${c.id}.pdf" class="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer">
+            <a href="/api/certificates/${esc(c.id)}/pdf" target="_blank" download="Certificado_${esc(c.id)}.pdf" class="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs flex items-center justify-center gap-1.5 cursor-pointer">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
               <span>Descargar PDF</span>
             </a>
-            <a href="#verify/${c.id}" class="px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer" title="Verificar autenticidad">
+            <a href="#verify/${esc(c.id)}" class="px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer" title="Verificar autenticidad">
               <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
             </a>
           </div>
@@ -533,7 +534,7 @@ export const CertificatesView = {
 
       if (window.lucide) window.lucide.createIcons();
     } catch (e) {
-      container.innerHTML = `<div class="p-6 text-xs text-rose-600 bg-rose-50 rounded-2xl col-span-full">Error cargando certificados: ${e.message}</div>`;
+      container.innerHTML = `<div class="p-6 text-xs text-rose-600 bg-rose-50 rounded-2xl col-span-full">Error cargando certificados: ${esc(e.message)}</div>`;
     }
   },
 
@@ -1200,7 +1201,7 @@ export const CertificatesView = {
     } catch (err) {
       container.innerHTML = `
         <div class="p-3 text-xs text-rose-600 bg-rose-50 rounded-xl">
-          Error al cargar certificados emitidos: ${err.message}
+          Error al cargar certificados emitidos: ${esc(err.message)}
         </div>
       `;
     }
@@ -1256,23 +1257,23 @@ export const CertificatesView = {
     `;
 
     list.slice(0, 50).forEach(item => {
-      const verifyHash = `#verify/${item.id}`;
+      const verifyHash = `#verify/${esc(item.id)}`;
       html += `
         <tr class="hover:bg-slate-50/80 transition-colors">
           <td class="py-2.5 px-3 font-mono font-bold text-indigo-700">
             <span class="bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded text-[11px]">
-              ${item.id}
+              ${esc(item.id)}
             </span>
           </td>
-          <td class="py-2.5 px-3 font-semibold text-slate-900">${item.studentName}</td>
-          <td class="py-2.5 px-3 text-slate-600 text-[11px]">${item.courseTitle || 'Diplomado'}</td>
-          <td class="py-2.5 px-3 text-slate-500 text-[11px]">${item.issueDate}</td>
+          <td class="py-2.5 px-3 font-semibold text-slate-900">${esc(item.studentName)}</td>
+          <td class="py-2.5 px-3 text-slate-600 text-[11px]">${esc(item.courseTitle || 'Diplomado')}</td>
+          <td class="py-2.5 px-3 text-slate-500 text-[11px]">${esc(item.issueDate)}</td>
           <td class="py-2.5 px-3 text-right space-x-1">
-            <a href="${verifyHash}" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
+            <a href="${esc(verifyHash)}" class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors">
               <i data-lucide="shield-check" class="w-3 h-3"></i>
               Verificar
             </a>
-            <button data-copy-link="${item.id}" class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+            <button data-copy-link="${esc(item.id)}" class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
               <i data-lucide="copy" class="w-3 h-3"></i>
               Copiar
             </button>
@@ -1318,7 +1319,7 @@ export const CertificatesView = {
       const course = `"${(c.courseTitle || '').replace(/"/g, '""')}"`;
       const date = `"${(c.issueDate || '').replace(/"/g, '""')}"`;
       const url = `"${window.location.origin}/#verify/${c.id}"`;
-      csv += `${code},${name},${course},${date},${url}\r\n`;
+      csv += `${esc(code)},${esc(name)},${course},${esc(date)},${url}\r\n`;
     });
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

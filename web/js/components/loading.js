@@ -1,3 +1,4 @@
+import { esc } from '../utils/escape.js';
 // Loading and Skeleton component
 
 export const Loading = {
@@ -5,7 +6,7 @@ export const Loading = {
     return `
       <div class="flex flex-col items-center justify-center p-12 text-slate-500 gap-3">
         <div class="w-8 h-8 border-3 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin"></div>
-        <span class="text-xs font-medium">${text}</span>
+        <span class="text-xs font-medium">${esc(text)}</span>
       </div>
     `;
   },
@@ -21,7 +22,7 @@ export const Loading = {
       <div class="bg-white rounded-2xl shadow-2xl p-6 flex items-center gap-4 border border-slate-100 max-w-sm w-full">
         <div class="w-7 h-7 border-3 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin shrink-0"></div>
         <div>
-          <p class="text-xs font-bold text-slate-800">${text}</p>
+          <p class="text-xs font-bold text-slate-800">${esc(text)}</p>
           <p class="text-[11px] text-slate-400">Por favor, espera un momento...</p>
         </div>
       </div>
@@ -32,6 +33,15 @@ export const Loading = {
   hideOverlay() {
     const overlay = document.getElementById('global-loading-overlay');
     if (overlay) overlay.remove();
+  },
+
+  // Alias usados por las vistas (courses.js, etc.): antes no existían y lanzaban TypeError.
+  show(text) {
+    this.overlay(text);
+  },
+
+  hide() {
+    this.hideOverlay();
   },
 
   skeletonCard() {

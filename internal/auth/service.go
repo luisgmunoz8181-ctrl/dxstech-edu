@@ -38,7 +38,8 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP, userAge
 	row := s.db.QueryRowContext(ctx, `
 		SELECT u.id, u.first_name, u.last_name, u.email, u.password_hash, u.role_id,
 		       r.name as role_name, u.status, u.email_verified, u.must_change_password,
-		       u.identification, u.company, u.job_title, u.last_login, u.created_at, u.updated_at
+		       u.identification, u.company, u.job_title, u.last_login, u.created_at, u.updated_at,
+		       u.token_version
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
 		WHERE lower(u.email) = ?
@@ -52,6 +53,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP, userAge
 		&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.PasswordHash, &u.RoleID,
 		&u.Role, &u.Status, &u.EmailVerified, &u.MustChangePassword,
 		&iden, &comp, &job, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
+		&u.TokenVersion,
 	)
 
 	if err != nil {
@@ -151,6 +153,19 @@ func (s *Service) GetMe(ctx context.Context, userID string) (*User, error) {
 	return &u, nil
 }
 
+// IssueToken emite un token nuevo para un usuario ya autenticado (p. ej. tras
+// cambiar la contraseña, que invalida los tokens anteriores).
+func (s *Service) IssueToken(ctx context.Context, userID string, duration time.Duration) (string, error) {
+	u, err := s.GetMe(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+	if err := s.db.QueryRowContext(ctx, `SELECT token_version FROM users WHERE id = ?`, userID).Scan(&u.TokenVersion); err != nil {
+		return "", err
+	}
+	return GenerateToken(u, s.cfg.JWTSecret, duration)
+}
+
 func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPassword, clientIP, userAgent string) error {
 	if err := ValidatePasswordPolicy(newPassword); err != nil {
 		return err
@@ -175,7 +190,8 @@ func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPa
 	now := time.Now()
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE users 
-		SET password_hash = ?, password_changed_at = ?, must_change_password = 0, updated_at = ?
+		SET password_hash = ?, password_changed_at = ?, must_change_password = 0, updated_at = ?,
+		    token_version = token_version + 1
 		WHERE id = ?
 	`, string(newHash), now, now, userID)
 	if err != nil {
@@ -258,7 +274,8 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword, clie
 	now := time.Now()
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE users 
-		SET password_hash = ?, password_changed_at = ?, must_change_password = 0, updated_at = ?
+		SET password_hash = ?, password_changed_at = ?, must_change_password = 0, updated_at = ?,
+		    token_version = token_version + 1
 		WHERE lower(email) = ?
 	`, string(newHash), now, now, email)
 	if err != nil {
@@ -390,9 +407,10 @@ func (s *Service) UpdateUser(ctx context.Context, adminID, targetID string, req 
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE users
 		SET first_name = ?, last_name = ?, email = ?, role_id = ?, status = ?,
-		    identification = ?, company = ?, job_title = ?, updated_at = ?
+		    identification = ?, company = ?, job_title = ?, updated_at = ?,
+		    token_version = token_version + CASE WHEN role_id != ? OR status != ? THEN 1 ELSE 0 END
 		WHERE id = ?
-	`, strings.TrimSpace(req.FirstName), strings.TrimSpace(req.LastName), email, req.RoleID, req.Status, req.Identification, req.Company, req.JobTitle, now, targetID)
+	`, strings.TrimSpace(req.FirstName), strings.TrimSpace(req.LastName), email, req.RoleID, req.Status, req.Identification, req.Company, req.JobTitle, now, req.RoleID, req.Status, targetID)
 
 	if err != nil {
 		return nil, fmt.Errorf("error actualizando usuario: %w", err)
@@ -419,7 +437,7 @@ func (s *Service) ToggleUserStatus(ctx context.Context, adminID, targetID, clien
 	}
 
 	now := time.Now()
-	_, err = s.db.ExecContext(ctx, `UPDATE users SET status = ?, updated_at = ? WHERE id = ?`, newStatus, now, targetID)
+	_, err = s.db.ExecContext(ctx, `UPDATE users SET status = ?, updated_at = ?, token_version = token_version + 1 WHERE id = ?`, newStatus, now, targetID)
 	if err != nil {
 		return nil, err
 	}

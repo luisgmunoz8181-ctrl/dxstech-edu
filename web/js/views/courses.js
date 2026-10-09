@@ -1,6 +1,7 @@
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
 import { Loading } from '../components/loading.js';
+import { esc, safeUrl } from '../utils/escape.js';
 
 export const CoursesView = {
   courses: [],
@@ -119,7 +120,7 @@ export const CoursesView = {
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                 <i data-lucide="search" class="w-4 h-4"></i>
               </span>
-              <input type="text" id="course-search-input" value="${this.search}" placeholder="Buscar curso o código..." class="w-full text-xs rounded-xl border border-slate-200 pl-9 pr-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
+              <input type="text" id="course-search-input" value="${esc(this.search)}" placeholder="Buscar curso o código..." class="w-full text-xs rounded-xl border border-slate-200 pl-9 pr-3.5 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
             </div>
 
             <!-- Category filter -->
@@ -173,16 +174,16 @@ export const CoursesView = {
             <div>
               <div class="flex items-center gap-2">
                 <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  ${c.category}
+                  ${esc(c.category)}
                 </span>
-                <span class="text-xs font-mono font-bold text-slate-400">${c.code}</span>
+                <span class="text-xs font-mono font-bold text-slate-400">${esc(c.code)}</span>
                 ${isCompleted ? `
                   <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
                     <i data-lucide="award" class="w-3 h-3 text-emerald-600"></i> Completado
                   </span>
                 ` : ''}
               </div>
-              <h3 class="text-lg font-black text-slate-900 leading-tight mt-0.5">${c.title}</h3>
+              <h3 class="text-lg font-black text-slate-900 leading-tight mt-0.5">${esc(c.title)}</h3>
             </div>
           </div>
 
@@ -260,18 +261,18 @@ export const CoursesView = {
                       <span class="w-5 h-5 rounded-md bg-white text-indigo-700 text-[10px] font-bold flex items-center justify-center shadow-2xs border border-slate-200">
                         ${mIdx + 1}
                       </span>
-                      <h5 class="text-xs font-bold text-slate-800 leading-tight">${m.title}</h5>
+                      <h5 class="text-xs font-bold text-slate-800 leading-tight">${esc(m.title)}</h5>
                     </div>
 
                     ${isAdmin ? `
                       <div class="flex items-center gap-1">
-                        <button data-add-lesson-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer" title="Añadir Lección">
+                        <button data-add-lesson-mod="${esc(m.id)}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer" title="Añadir Lección">
                           <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                         </button>
-                        <button data-edit-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer" title="Editar Módulo">
+                        <button data-edit-mod="${esc(m.id)}" class="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer" title="Editar Módulo">
                           <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                         </button>
-                        <button data-del-mod="${m.id}" class="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-white transition-colors cursor-pointer" title="Eliminar Módulo">
+                        <button data-del-mod="${esc(m.id)}" class="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-white transition-colors cursor-pointer" title="Eliminar Módulo">
                           <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                         </button>
                       </div>
@@ -294,13 +295,13 @@ export const CoursesView = {
 
                       return `
                         <div class="group flex items-center justify-between p-2 rounded-xl text-xs transition-all cursor-pointer ${isCurrent ? 'bg-indigo-600 text-white font-bold shadow-xs' : 'text-slate-700 hover:bg-slate-200/60 font-medium'}">
-                          <div data-select-lesson="${lsn.id}" class="flex-1 flex items-center gap-2.5 truncate">
+                          <div data-select-lesson="${esc(lsn.id)}" class="flex-1 flex items-center gap-2.5 truncate">
                             ${isCompleted ? `
                               <i data-lucide="check-circle-2" class="w-4 h-4 shrink-0 ${isCurrent ? 'text-emerald-300' : 'text-emerald-500'}"></i>
                             ` : `
                               <i data-lucide="${iconName}" class="w-4 h-4 shrink-0 ${isCurrent ? 'text-indigo-200' : 'text-slate-400'}"></i>
                             `}
-                            <span class="truncate">${lsn.title}</span>
+                            <span class="truncate">${esc(lsn.title)}</span>
                           </div>
 
                           <div class="flex items-center gap-1.5 shrink-0 ml-2">
@@ -312,10 +313,10 @@ export const CoursesView = {
                             <span class="text-[10px] ${isCurrent ? 'text-indigo-200' : 'text-slate-400'}">${lsn.durationMinutes}m</span>
 
                             ${isAdmin ? `
-                              <button data-edit-lesson="${lsn.id}" class="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors hidden group-hover:block cursor-pointer" title="Editar lección">
+                              <button data-edit-lesson="${esc(lsn.id)}" class="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors hidden group-hover:block cursor-pointer" title="Editar lección">
                                 <i data-lucide="edit-2" class="w-3 h-3"></i>
                               </button>
-                              <button data-del-lesson="${lsn.id}" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors hidden group-hover:block cursor-pointer" title="Eliminar lección">
+                              <button data-del-lesson="${esc(lsn.id)}" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-white transition-colors hidden group-hover:block cursor-pointer" title="Eliminar lección">
                                 <i data-lucide="trash" class="w-3 h-3"></i>
                               </button>
                             ` : ''}
@@ -365,26 +366,26 @@ export const CoursesView = {
     let viewerHTML = '';
 
     if (l.contentType === 'youtube') {
-      const videoId = this.extractYouTubeId(l.contentURL);
+      const videoId = this.extractYouTubeId(l.contentUrl);
       if (videoId) {
         viewerHTML = `
           <div class="aspect-video w-full rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-black">
             <iframe 
-              src="https://www.youtube.com/embed/${videoId}?rel=0" 
+              src="https://www.youtube.com/embed/${esc(videoId)}?rel=0" 
               class="w-full h-full" 
-              title="${l.title}"
+              title="${esc(l.title)}"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
               allowfullscreen>
             </iframe>
           </div>
         `;
       } else {
-        viewerHTML = `<div class="p-6 text-xs text-amber-800 bg-amber-50 rounded-2xl border border-amber-200">Enlace de YouTube no reconocido: ${l.contentURL}</div>`;
+        viewerHTML = `<div class="p-6 text-xs text-amber-800 bg-amber-50 rounded-2xl border border-amber-200">Enlace de YouTube no reconocido: ${safeUrl(l.contentUrl)}</div>`;
       }
     } else if (l.contentType === 'mp4') {
       viewerHTML = `
         <div class="aspect-video w-full rounded-2xl overflow-hidden shadow-lg border border-slate-200 bg-black">
-          <video src="${l.contentURL}" controls class="w-full h-full" preload="metadata"></video>
+          <video src="${safeUrl(l.contentUrl)}" controls class="w-full h-full" preload="metadata"></video>
         </div>
       `;
     } else if (l.contentType === 'pdf') {
@@ -395,28 +396,28 @@ export const CoursesView = {
               <i data-lucide="file-text" class="w-4 h-4 text-rose-500"></i> Documento Oficial PDF
             </span>
             <div class="flex items-center gap-2">
-              <a href="${l.contentURL}" target="_blank" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1">
+              <a href="${safeUrl(l.contentUrl)}" target="_blank" class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 font-bold text-slate-700 hover:bg-slate-100 transition-colors flex items-center gap-1">
                 <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Abrir en nueva ventana
               </a>
-              <a href="${l.contentURL}" download class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs">
+              <a href="${safeUrl(l.contentUrl)}" download class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs">
                 <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar
               </a>
             </div>
           </div>
           <div class="w-full h-[650px] rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            <iframe src="${l.contentURL}" class="w-full h-full"></iframe>
+            <iframe src="${safeUrl(l.contentUrl)}" class="w-full h-full"></iframe>
           </div>
         </div>
       `;
     } else if (l.contentType === 'pptx') {
-      const officeViewerURL = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(l.contentURL)}`;
+      const officeViewerURL = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(l.contentUrl)}`;
       viewerHTML = `
         <div class="space-y-3">
           <div class="flex items-center justify-between bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
             <span class="font-semibold text-slate-700 flex items-center gap-1.5">
               <i data-lucide="presentation" class="w-4 h-4 text-amber-500"></i> Presentación de Diapositivas PPTX
             </span>
-            <a href="${l.contentURL}" download class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs">
+            <a href="${safeUrl(l.contentUrl)}" download class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs">
               <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar Diapositivas
             </a>
           </div>
@@ -466,7 +467,7 @@ export const CoursesView = {
       // Text / Guide content
       viewerHTML = `
         <div class="prose prose-slate max-w-none text-slate-700 text-sm leading-relaxed p-6 bg-slate-50/70 rounded-2xl border border-slate-200">
-          ${l.contentBody ? l.contentBody.replace(/\n/g, '<br>') : '<p class="italic text-slate-400">Sin contenido de lectura añadido.</p>'}
+          ${l.contentBody ? esc(l.contentBody).replace(/\n/g, '<br>') : '<p class="italic text-slate-400">Sin contenido de lectura añadido.</p>'}
         </div>
       `;
     }
@@ -481,8 +482,8 @@ export const CoursesView = {
               </span>
               <span class="text-xs text-slate-400 font-semibold">• ${l.durationMinutes} minutos estimados</span>
             </div>
-            <h3 class="text-xl font-black text-slate-900">${l.title}</h3>
-            ${l.description ? `<p class="text-xs text-slate-500 mt-1">${l.description}</p>` : ''}
+            <h3 class="text-xl font-black text-slate-900">${esc(l.title)}</h3>
+            ${l.description ? `<p class="text-xs text-slate-500 mt-1">${esc(l.description)}</p>` : ''}
           </div>
 
           <!-- Progress Action Buttons -->
@@ -827,12 +828,12 @@ export const CoursesView = {
         <div class="bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-lg transition-all overflow-hidden flex flex-col group">
           <!-- Thumbnail Image -->
           <div class="relative h-44 bg-slate-100 overflow-hidden">
-            <img src="${thumb}" alt="${c.title}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onerror="this.src='${fallbackThumb}'">
+            <img src="${safeUrl(thumb)}" alt="${esc(c.title)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onerror="this.src='${fallbackThumb}'">
             <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
             
             <div class="absolute top-3 left-3 flex flex-wrap gap-1.5">
               <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-white/90 backdrop-blur-md text-slate-800 shadow-2xs">
-                ${c.category}
+                ${esc(c.category)}
               </span>
               ${isAdmin ? statusBadge : ''}
               ${isEnrolled ? `
@@ -847,7 +848,7 @@ export const CoursesView = {
                 <i data-lucide="clock" class="w-3.5 h-3.5"></i> ${c.durationHours}h
               </span>
               <span class="flex items-center gap-1 drop-shadow-sm font-mono text-[10px] bg-black/40 px-2 py-0.5 rounded-full">
-                ${c.code}
+                ${esc(c.code)}
               </span>
             </div>
           </div>
@@ -857,16 +858,16 @@ export const CoursesView = {
             <div>
               <div class="flex items-center gap-2 text-slate-400 text-[11px] mb-1">
                 <i data-lucide="user" class="w-3.5 h-3.5"></i>
-                <span>${c.instructorName || 'Docente Asignado'}</span>
+                <span>${esc(c.instructorName || 'Docente Asignado')}</span>
                 <span>•</span>
-                <span class="font-medium text-indigo-600">${c.level}</span>
+                <span class="font-medium text-indigo-600">${esc(c.level)}</span>
               </div>
 
               <h4 class="text-base font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors">
-                ${c.title}
+                ${esc(c.title)}
               </h4>
               <p class="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">
-                ${c.shortDescription || c.description || 'Sin descripción disponible.'}
+                ${esc(c.shortDescription || c.description || 'Sin descripción disponible.')}
               </p>
             </div>
 
@@ -892,24 +893,24 @@ export const CoursesView = {
 
               <div class="flex items-center gap-1.5">
                 ${isEnrolled && isCompleted ? `
-                  <button data-course-cert="${c.id}" class="p-2 rounded-xl text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center justify-center shadow-2xs cursor-pointer" title="Descargar Certificado Oficial">
+                  <button data-course-cert="${esc(c.id)}" class="p-2 rounded-xl text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center justify-center shadow-2xs cursor-pointer" title="Descargar Certificado Oficial">
                     <i data-lucide="award" class="w-4 h-4"></i>
                   </button>
                 ` : ''}
                 ${isEnrolled ? `
-                  <button data-open-course="${c.id}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs cursor-pointer">
+                  <button data-open-course="${esc(c.id)}" class="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors flex items-center gap-1 shadow-xs cursor-pointer">
                     <span>Continuar</span>
                     <i data-lucide="play" class="w-3 h-3"></i>
                   </button>
                 ` : `
-                  <button data-open-course="${c.id}" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer">
+                  <button data-open-course="${esc(c.id)}" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer">
                     <span>${isAdmin ? 'Gestionar' : 'Explorar'}</span>
                     <i data-lucide="arrow-right" class="w-3 h-3"></i>
                   </button>
                 `}
 
                 ${isAdmin ? `
-                  <button data-course-menu="${c.id}" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer" title="Opciones Administrativas">
+                  <button data-course-menu="${esc(c.id)}" class="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer" title="Opciones Administrativas">
                     <i data-lucide="more-vertical" class="w-4 h-4"></i>
                   </button>
                 ` : ''}
@@ -1088,15 +1089,15 @@ export const CoursesView = {
               <span class="inline-block px-3 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 mb-2">
                 🏆 ¡Felicitaciones! Certificación Oficial Obtenida
               </span>
-              <h3 class="text-xl font-black text-slate-900">${cert.studentName}</h3>
+              <h3 class="text-xl font-black text-slate-900">${esc(cert.studentName)}</h3>
               <p class="text-xs text-slate-500 mt-1">ha completado y aprobado satisfactoriamente los requisitos académicos de:</p>
-              <p class="text-sm font-bold text-indigo-700 mt-1">« ${cert.courseTitle} »</p>
+              <p class="text-sm font-bold text-indigo-700 mt-1">« ${esc(cert.courseTitle)} »</p>
             </div>
 
             <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 text-left space-y-2 text-xs">
               <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                 <span class="text-slate-500 font-medium">Código de Registro Único:</span>
-                <span class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">${cert.id}</span>
+                <span class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">${esc(cert.id)}</span>
               </div>
               <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                 <span class="text-slate-500 font-medium">Intensidad Académica:</span>
@@ -1104,20 +1105,20 @@ export const CoursesView = {
               </div>
               <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                 <span class="text-slate-500 font-medium">Fecha de Emisión:</span>
-                <span class="font-semibold text-slate-800">${cert.issueDate}</span>
+                <span class="font-semibold text-slate-800">${esc(cert.issueDate)}</span>
               </div>
               <div class="flex justify-between items-center py-1">
                 <span class="text-slate-500 font-medium">Docente / Director:</span>
-                <span class="font-semibold text-indigo-600">${cert.instructorName || 'DxSTech Edu'}</span>
+                <span class="font-semibold text-indigo-600">${esc(cert.instructorName || 'DxSTech Edu')}</span>
               </div>
             </div>
 
             <div class="pt-2 flex flex-wrap items-center justify-center gap-3">
-              <a href="/api/certificates/${cert.id}/pdf" target="_blank" download="Certificado_${cert.id}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 cursor-pointer">
+              <a href="/api/certificates/${esc(cert.id)}/pdf" target="_blank" download="Certificado_${esc(cert.id)}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center gap-2 cursor-pointer">
                 <i data-lucide="download" class="w-4 h-4"></i>
                 <span>Descargar Diploma Oficial (PDF)</span>
               </a>
-              <a href="#verify/${cert.id}" id="go-verify-link" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer">
+              <a href="#verify/${esc(cert.id)}" id="go-verify-link" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="shield-check" class="w-4 h-4 text-emerald-600"></i>
                 <span>Validar en Línea</span>
               </a>
@@ -1192,11 +1193,11 @@ export const CoursesView = {
           <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 flex items-center justify-between">
             <div class="flex items-center gap-3">
               <div class="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">
-                ${(e.studentName || 'U').charAt(0)}
+                ${esc((e.studentName || 'U').charAt(0))}
               </div>
               <div>
-                <p class="font-bold text-slate-800">${e.studentName}</p>
-                <p class="text-[11px] text-slate-400">${e.studentEmail}</p>
+                <p class="font-bold text-slate-800">${esc(e.studentName)}</p>
+                <p class="text-[11px] text-slate-400">${esc(e.studentEmail)}</p>
               </div>
             </div>
 
@@ -1210,7 +1211,7 @@ export const CoursesView = {
         `).join('');
       } catch (err) {
         const container = document.getElementById('students-modal-list');
-        if (container) container.innerHTML = `<p class="text-rose-500 py-4 text-center">${err.message}</p>`;
+        if (container) container.innerHTML = `<p class="text-rose-500 py-4 text-center">${esc(err.message)}</p>`;
       }
     }, 50);
   },
@@ -1220,12 +1221,12 @@ export const CoursesView = {
     if (!course) return;
 
     Modal.show({
-      title: `Opciones de Curso: ${course.code}`,
+      title: `Opciones de Curso: ${esc(course.code)}`,
       confirmText: 'Cerrar',
       showCancel: false,
       content: `
         <div class="space-y-2 text-left text-xs">
-          <p class="font-bold text-slate-800 text-sm mb-3">${course.title}</p>
+          <p class="font-bold text-slate-800 text-sm mb-3">${esc(course.title)}</p>
           
           <button id="modal-action-students" class="w-full text-left p-2.5 rounded-xl hover:bg-slate-100 flex items-center gap-2.5 text-slate-700 font-semibold transition-colors cursor-pointer">
             <i data-lucide="users" class="w-4 h-4 text-indigo-600"></i> Ver Estudiantes Matriculados
@@ -1299,18 +1300,18 @@ export const CoursesView = {
           <div class="grid grid-cols-3 gap-3">
             <div class="col-span-2">
               <label class="block font-semibold text-slate-700 mb-1">Título del Curso *</label>
-              <input type="text" id="course-title" required value="${course?.title || ''}" placeholder="Ej. Arquitectura de Microservicios con Go" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
+              <input type="text" id="course-title" required value="${esc(course?.title || '')}" placeholder="Ej. Arquitectura de Microservicios con Go" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Código Único *</label>
-              <input type="text" id="course-code" required value="${course?.code || ''}" placeholder="DXS-GO-201" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono">
+              <input type="text" id="course-code" required value="${esc(course?.code || '')}" placeholder="DXS-GO-201" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono">
             </div>
           </div>
 
           <div class="grid grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Categoría</label>
-              <input type="text" id="course-category" value="${course?.category || 'Tecnología'}" placeholder="Inteligencia Artificial" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
+              <input type="text" id="course-category" value="${esc(course?.category || 'Tecnología')}" placeholder="Inteligencia Artificial" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
             </div>
             <div>
               <label class="block font-semibold text-slate-700 mb-1">Nivel</label>
@@ -1328,13 +1329,13 @@ export const CoursesView = {
 
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Instructor</label>
-            <input type="text" id="course-instructor" value="${course?.instructorName || 'Equipo DxSTech'}" placeholder="Dr. Alexander Gómez" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
+            <input type="text" id="course-instructor" value="${esc(course?.instructorName || 'Equipo DxSTech')}" placeholder="Dr. Alexander Gómez" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
           </div>
 
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Imagen de Portada (URL o Subir Archivo)</label>
             <div class="flex gap-2">
-              <input type="text" id="course-thumb" value="${course?.thumbnailUrl || ''}" placeholder="https://ejemplo.com/imagen.jpg" class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs">
+              <input type="text" id="course-thumb" value="${safeUrl(course?.thumbnailUrl || '')}" placeholder="https://ejemplo.com/imagen.jpg" class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs">
               <label class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shrink-0">
                 <i data-lucide="upload" class="w-3.5 h-3.5"></i>
                 <span>Subir</span>
@@ -1345,12 +1346,12 @@ export const CoursesView = {
 
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Descripción Corta</label>
-            <input type="text" id="course-short-desc" value="${course?.shortDescription || ''}" placeholder="Resumen conciso en 1-2 líneas" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
+            <input type="text" id="course-short-desc" value="${esc(course?.shortDescription || '')}" placeholder="Resumen conciso en 1-2 líneas" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
           </div>
 
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Descripción Completa</label>
-            <textarea id="course-desc" rows="3" placeholder="Detalles de la capacitación..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">${course?.description || ''}</textarea>
+            <textarea id="course-desc" rows="3" placeholder="Detalles de la capacitación..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">${esc(course?.description || '')}</textarea>
           </div>
         </form>
       `,
@@ -1379,7 +1380,7 @@ export const CoursesView = {
             status: course?.status || 'draft',
           };
 
-          const url = isEdit ? `/api/courses/${course.id}` : '/api/courses';
+          const url = isEdit ? `/api/courses/${esc(course.id)}` : '/api/courses';
           const method = isEdit ? 'PUT' : 'POST';
 
           const res = await fetch(url, {
@@ -1441,11 +1442,11 @@ export const CoursesView = {
         <form class="space-y-3 text-left text-xs">
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Título del Módulo *</label>
-            <input type="text" id="mod-title" required value="${mod?.title || ''}" placeholder="Ej. Módulo 1: Fundamentos y Conceptos Básicos" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
+            <input type="text" id="mod-title" required value="${esc(mod?.title || '')}" placeholder="Ej. Módulo 1: Fundamentos y Conceptos Básicos" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Descripción Breve</label>
-            <textarea id="mod-desc" rows="2" placeholder="Resumen del contenido del módulo..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">${mod?.description || ''}</textarea>
+            <textarea id="mod-desc" rows="2" placeholder="Resumen del contenido del módulo..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">${esc(mod?.description || '')}</textarea>
           </div>
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Posición / Orden</label>
@@ -1464,7 +1465,7 @@ export const CoursesView = {
         }
 
         try {
-          const url = isEdit ? `/api/courses/modules/${mod.id}` : `/api/courses/${courseId}/modules`;
+          const url = isEdit ? `/api/courses/modules/${esc(mod.id)}` : `/api/courses/${esc(courseId)}/modules`;
           const method = isEdit ? 'PUT' : 'POST';
 
           const res = await fetch(url, {
@@ -1495,7 +1496,7 @@ export const CoursesView = {
         <form class="space-y-3.5 text-left text-xs">
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Título de la Lección *</label>
-            <input type="text" id="lesson-title" required value="${lesson?.title || ''}" placeholder="Ej. Introducción y Arquitectura General" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
+            <input type="text" id="lesson-title" required value="${esc(lesson?.title || '')}" placeholder="Ej. Introducción y Arquitectura General" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
           </div>
 
           <div class="grid grid-cols-2 gap-3">
@@ -1520,7 +1521,7 @@ export const CoursesView = {
           <div id="lesson-url-box" class="${lesson?.contentType === 'quiz' ? 'hidden' : ''}">
             <label class="block font-semibold text-slate-700 mb-1">URL o Archivo Adjunto</label>
             <div class="flex gap-2">
-              <input type="text" id="lesson-url" value="${lesson?.contentURL || ''}" placeholder="https://www.youtube.com/watch?v=... o archivo subido" class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs">
+              <input type="text" id="lesson-url" value="${safeUrl(lesson?.contentUrl || '')}" placeholder="https://www.youtube.com/watch?v=... o archivo subido" class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs">
               <label id="lesson-upload-btn-label" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shrink-0">
                 <i data-lucide="upload" class="w-3.5 h-3.5"></i>
                 <span>Subir</span>
@@ -1554,12 +1555,12 @@ export const CoursesView = {
           <!-- Rich Text Body for text types -->
           <div id="lesson-body-box">
             <label class="block font-semibold text-slate-700 mb-1">Contenido de Lectura (Markdown / Texto)</label>
-            <textarea id="lesson-body" rows="4" placeholder="Escribe aquí las instrucciones, apuntes o guías de estudio..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">${lesson?.contentBody || ''}</textarea>
+            <textarea id="lesson-body" rows="4" placeholder="Escribe aquí las instrucciones, apuntes o guías de estudio..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">${esc(lesson?.contentBody || '')}</textarea>
           </div>
 
           <div>
             <label class="block font-semibold text-slate-700 mb-1">Descripción Breve de la Lección</label>
-            <input type="text" id="lesson-desc" value="${lesson?.description || ''}" placeholder="Orientaciones para el estudiante..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
+            <input type="text" id="lesson-desc" value="${esc(lesson?.description || '')}" placeholder="Orientaciones para el estudiante..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs">
           </div>
 
           <div class="flex items-center gap-2 pt-1">
@@ -1591,7 +1592,7 @@ export const CoursesView = {
             quizId: lesson?.quizId || null,
           };
 
-          const url = isEdit ? `/api/courses/lessons/${lesson.id}` : `/api/courses/modules/${moduleId}/lessons`;
+          const url = isEdit ? `/api/courses/lessons/${esc(lesson.id)}` : `/api/courses/modules/${esc(moduleId)}/lessons`;
           const method = isEdit ? 'PUT' : 'POST';
 
           const res = await fetch(url, {
@@ -1842,14 +1843,14 @@ export const CoursesView = {
                   <span class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0 border border-indigo-100">
                     ${idx + 1}
                   </span>
-                  <p class="font-bold text-slate-800 text-xs sm:text-sm leading-relaxed">${q.question}</p>
+                  <p class="font-bold text-slate-800 text-xs sm:text-sm leading-relaxed">${esc(q.question)}</p>
                 </div>
 
                 <div class="space-y-2 pt-1 pl-8">
                   ${q.options.map((opt, optIdx) => `
                     <label class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200/80 hover:bg-indigo-50/50 hover:border-indigo-200 cursor-pointer transition-colors text-xs text-slate-700 font-medium opt-row">
                       <input type="radio" name="lesson-quiz-q-${idx}" value="${opt.replace(/"/g, '&quot;')}" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
-                      <span>${opt}</span>
+                      <span>${esc(opt)}</span>
                     </label>
                   `).join('')}
                 </div>
@@ -1879,7 +1880,7 @@ export const CoursesView = {
         this.submitLessonQuiz(quiz, lesson);
       });
     } catch (err) {
-      container.innerHTML = `<div class="p-6 text-center text-xs text-rose-600 bg-rose-50 rounded-2xl">${err.message}</div>`;
+      container.innerHTML = `<div class="p-6 text-center text-xs text-rose-600 bg-rose-50 rounded-2xl">${esc(err.message)}</div>`;
     }
   },
 
@@ -1932,7 +1933,7 @@ export const CoursesView = {
           } else {
             card.classList.remove('border-slate-200', 'border-emerald-300');
             card.classList.add('border-rose-300', 'bg-rose-50/20');
-            feedbackDiv.innerHTML = `<span class="text-rose-700 flex items-center gap-1.5"><i data-lucide="x" class="w-3.5 h-3.5"></i> Incorrecto. Respuesta correcta: <strong>${item.correctAnswer}</strong></span>`;
+            feedbackDiv.innerHTML = `<span class="text-rose-700 flex items-center gap-1.5"><i data-lucide="x" class="w-3.5 h-3.5"></i> Incorrecto. Respuesta correcta: <strong>${esc(item.correctAnswer)}</strong></span>`;
           }
         });
       }
@@ -1984,8 +1985,8 @@ export const CoursesView = {
           <div class="p-3 bg-purple-50 rounded-2xl border border-purple-200 flex items-center justify-between">
             <div>
               <span class="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Contexto Académico</span>
-              <p class="font-bold text-slate-800 text-xs">${course.title}</p>
-              ${lesson ? `<p class="text-[11px] text-purple-600">Lección: ${lesson.title}</p>` : ''}
+              <p class="font-bold text-slate-800 text-xs">${esc(course.title)}</p>
+              ${lesson ? `<p class="text-[11px] text-purple-600">Lección: ${esc(lesson.title)}</p>` : ''}
             </div>
             <a href="https://wa.me/?text=${encodeURIComponent('Hola DxSTech Edu, tengo una consulta sobre el curso ' + course.title + (lesson ? ' - Lección: ' + lesson.title : '') + ': ')}" target="_blank" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 transition-colors shrink-0 shadow-xs" title="Continuar en WhatsApp">
               <i data-lucide="phone" class="w-3.5 h-3.5"></i>
@@ -2047,7 +2048,7 @@ export const CoursesView = {
         chatBox.insertAdjacentHTML('beforeend', `
           <div class="flex items-start justify-end gap-2.5">
             <div class="bg-purple-600 text-white p-3 rounded-2xl leading-relaxed text-left max-w-[85%] shadow-2xs">
-              <p>${q.replace(/\n/g, '<br>')}</p>
+              <p>${esc(q).replace(/\n/g, '<br>')}</p>
             </div>
           </div>
         `);
@@ -2057,7 +2058,7 @@ export const CoursesView = {
         // Thinking indicator
         const typingId = 'tutor-typing-' + Date.now();
         chatBox.insertAdjacentHTML('beforeend', `
-          <div id="${typingId}" class="flex items-start gap-2.5">
+          <div id="${esc(typingId)}" class="flex items-start gap-2.5">
             <div class="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-xs">
               AI
             </div>
@@ -2089,14 +2090,14 @@ export const CoursesView = {
                 AI
               </div>
               <div class="bg-white p-3.5 rounded-2xl border border-slate-200 text-slate-800 leading-relaxed shadow-2xs max-w-[90%] space-y-1">
-                ${answerText.replace(/\n/g, '<br>')}
+                ${esc(answerText).replace(/\n/g, '<br>')}
               </div>
             </div>
           `);
         } catch (err) {
           document.getElementById(typingId)?.remove();
           chatBox.insertAdjacentHTML('beforeend', `
-            <div class="text-rose-500 text-xs py-1 text-center">${err.message}</div>
+            <div class="text-rose-500 text-xs py-1 text-center">${esc(err.message)}</div>
           `);
         }
         chatBox.scrollTop = chatBox.scrollHeight;
@@ -2131,7 +2132,7 @@ export const CoursesView = {
     Loading.hide();
 
     Modal.show({
-      title: `💬 Foro de Dudas: ${course.title}`,
+      title: `💬 Foro de Dudas: ${esc(course.title)}`,
       confirmText: 'Cerrar',
       showCancel: false,
       content: `
@@ -2147,7 +2148,7 @@ export const CoursesView = {
             <div class="flex items-center justify-between pt-1">
               <label class="flex items-center gap-1.5 text-slate-600 cursor-pointer">
                 <input type="checkbox" id="disc-link-lesson" ${lesson ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-indigo-600">
-                <span class="text-[11px]">${lesson ? `Asociar a "${lesson.title}"` : 'Consulta general del curso'}</span>
+                <span class="text-[11px]">${lesson ? `Asociar a "${esc(lesson.title)}"` : 'Consulta general del curso'}</span>
               </label>
               <button id="disc-post-btn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
                 <i data-lucide="send" class="w-3.5 h-3.5"></i>
@@ -2169,19 +2170,19 @@ export const CoursesView = {
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <div class="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[11px]">
-                      ${(d.userName || 'U').charAt(0)}
+                      ${esc((d.userName || 'U').charAt(0))}
                     </div>
                     <div>
-                      <span class="font-bold text-slate-800">${d.userName}</span>
-                      <span class="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-semibold ml-1">${d.userRole}</span>
+                      <span class="font-bold text-slate-800">${esc(d.userName)}</span>
+                      <span class="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-semibold ml-1">${esc(d.userRole)}</span>
                     </div>
                   </div>
                   <span class="text-[10px] text-slate-400">${new Date(d.createdAt).toLocaleDateString()}</span>
                 </div>
 
                 <div>
-                  <h5 class="font-bold text-slate-900 text-xs">${d.title}</h5>
-                  <p class="text-slate-600 text-xs mt-1 leading-relaxed">${d.message.replace(/\n/g, '<br>')}</p>
+                  <h5 class="font-bold text-slate-900 text-xs">${esc(d.title)}</h5>
+                  <p class="text-slate-600 text-xs mt-1 leading-relaxed">${esc(d.message).replace(/\n/g, '<br>')}</p>
                 </div>
 
                 <!-- Nested replies -->
@@ -2190,10 +2191,10 @@ export const CoursesView = {
                     ${d.replies.map(r => `
                       <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/60 text-xs">
                         <div class="flex items-center justify-between mb-1">
-                          <span class="font-bold text-slate-800">${r.userName} <span class="text-[10px] text-indigo-600">(${r.userRole})</span></span>
+                          <span class="font-bold text-slate-800">${esc(r.userName)} <span class="text-[10px] text-indigo-600">(${esc(r.userRole)})</span></span>
                           <span class="text-[10px] text-slate-400">${new Date(r.createdAt).toLocaleDateString()}</span>
                         </div>
-                        <p class="text-slate-600">${r.message.replace(/\n/g, '<br>')}</p>
+                        <p class="text-slate-600">${esc(r.message).replace(/\n/g, '<br>')}</p>
                       </div>
                     `).join('')}
                   </div>
@@ -2201,15 +2202,15 @@ export const CoursesView = {
 
                 <!-- Reply trigger -->
                 <div class="pt-1 flex justify-end">
-                  <button data-reply-to="${d.id}" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer">
+                  <button data-reply-to="${esc(d.id)}" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer">
                     <i data-lucide="corner-down-right" class="w-3 h-3"></i> Responder
                   </button>
                 </div>
 
-                <div id="reply-form-${d.id}" class="hidden pt-2 border-t border-slate-100 space-y-2">
-                  <input type="text" id="reply-input-${d.id}" placeholder="Escribe tu respuesta..." class="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs bg-slate-50">
+                <div id="reply-form-${esc(d.id)}" class="hidden pt-2 border-t border-slate-100 space-y-2">
+                  <input type="text" id="reply-input-${esc(d.id)}" placeholder="Escribe tu respuesta..." class="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs bg-slate-50">
                   <div class="flex justify-end gap-1.5">
-                    <button data-send-reply="${d.id}" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] cursor-pointer">Enviar Respuesta</button>
+                    <button data-send-reply="${esc(d.id)}" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] cursor-pointer">Enviar Respuesta</button>
                   </div>
                 </div>
               </div>
@@ -2259,7 +2260,7 @@ export const CoursesView = {
       document.querySelectorAll('[data-reply-to]').forEach(btn => {
         btn.addEventListener('click', () => {
           const id = btn.dataset.replyTo;
-          document.getElementById(`reply-form-${id}`)?.classList.toggle('hidden');
+          document.getElementById(`reply-form-${esc(id)}`)?.classList.toggle('hidden');
         });
       });
 
@@ -2267,7 +2268,7 @@ export const CoursesView = {
       document.querySelectorAll('[data-send-reply]').forEach(btn => {
         btn.addEventListener('click', async () => {
           const parentId = btn.dataset.sendReply;
-          const input = document.getElementById(`reply-input-${parentId}`);
+          const input = document.getElementById(`reply-input-${esc(parentId)}`);
           const message = input?.value.trim();
           if (!message) return;
 
@@ -2313,7 +2314,7 @@ export const CoursesView = {
     let selectedRating = 5;
 
     Modal.show({
-      title: `⭐ Opiniones: ${course.title}`,
+      title: `⭐ Opiniones: ${esc(course.title)}`,
       confirmText: 'Cerrar',
       showCancel: false,
       content: `
@@ -2370,15 +2371,15 @@ export const CoursesView = {
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
                     <div class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-[10px]">
-                      ${(r.userName || 'U').charAt(0)}
+                      ${esc((r.userName || 'U').charAt(0))}
                     </div>
-                    <span class="font-bold text-slate-800">${r.userName}</span>
+                    <span class="font-bold text-slate-800">${esc(r.userName)}</span>
                   </div>
                   <div class="flex text-amber-500 text-xs">
                     ${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}
                   </div>
                 </div>
-                ${r.comment ? `<p class="text-slate-600 text-xs leading-relaxed pl-8">${r.comment.replace(/\n/g, '<br>')}</p>` : ''}
+                ${r.comment ? `<p class="text-slate-600 text-xs leading-relaxed pl-8">${esc(r.comment).replace(/\n/g, '<br>')}</p>` : ''}
                 <div class="text-[10px] text-slate-400 text-right">
                   ${new Date(r.createdAt).toLocaleDateString()}
                 </div>

@@ -2,6 +2,7 @@ import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
 import { Loading } from '../components/loading.js';
 import { EmptyState } from '../components/empty-state.js';
+import { esc } from '../utils/escape.js';
 
 export const QuizzesView = {
   state: {
@@ -263,7 +264,7 @@ export const QuizzesView = {
       courses.forEach(c => {
         const opt = document.createElement('option');
         opt.value = c.id;
-        opt.textContent = `${c.title} (${c.code})`;
+        opt.textContent = `${esc(c.title)} (${esc(c.code)})`;
         select.appendChild(opt);
       });
     } catch {
@@ -434,7 +435,7 @@ Los códigos de respuesta HTTP esenciales son: 200 OK, 201 Created, 400 Bad Requ
       this.state.quizzesList = list;
       this.renderQuizzesTable(list);
     } catch (err) {
-      container.innerHTML = `<div class="p-4 text-xs text-rose-600 bg-rose-50 rounded-xl">Error cargando evaluaciones: ${err.message}</div>`;
+      container.innerHTML = `<div class="p-4 text-xs text-rose-600 bg-rose-50 rounded-xl">Error cargando evaluaciones: ${esc(err.message)}</div>`;
     }
   },
 
@@ -510,15 +511,15 @@ Los códigos de respuesta HTTP esenciales son: 200 OK, 201 Created, 400 Bad Requ
           </td>
           <td class="py-3 px-4 text-slate-400">${dateStr}</td>
           <td class="py-3 px-4 text-right space-x-1.5">
-            <button data-quiz-id="${q.id}" class="take-quiz-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors">
+            <button data-quiz-id="${esc(q.id)}" class="take-quiz-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs transition-colors">
               <i data-lucide="play" class="w-3.5 h-3.5"></i>
               <span>Simular</span>
             </button>
-            <button data-print-id="${q.id}" class="print-quiz-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors" title="Imprimir hoja de examen para clase">
+            <button data-print-id="${esc(q.id)}" class="print-quiz-btn inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors" title="Imprimir hoja de examen para clase">
               <i data-lucide="printer" class="w-3.5 h-3.5 text-slate-500"></i>
               <span>Imprimir</span>
             </button>
-            <button data-delete-id="${q.id}" class="delete-quiz-btn inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors" title="Eliminar examen">
+            <button data-delete-id="${esc(q.id)}" class="delete-quiz-btn inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors" title="Eliminar examen">
               <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
             </button>
           </td>
@@ -700,11 +701,11 @@ Los códigos de respuesta HTTP esenciales son: 200 OK, 201 Created, 400 Bad Requ
 
       // Bind copy text
       document.getElementById('copy-exam-text-btn')?.addEventListener('click', () => {
-        let plainText = `DxSTech Edu — Evaluación\n${quiz.title}\nEstudiante: __________________  Fecha: ___________\n\n`;
+        let plainText = `DxSTech Edu — Evaluación\n${esc(quiz.title)}\nEstudiante: __________________  Fecha: ___________\n\n`;
         quiz.questions.forEach((q, idx) => {
-          plainText += `${idx + 1}. ${q.question}\n`;
+          plainText += `${idx + 1}. ${esc(q.question)}\n`;
           q.options.forEach((opt, oIdx) => {
-            plainText += `   [ ] ${String.fromCharCode(65 + oIdx)}) ${opt}\n`;
+            plainText += `   [ ] ${String.fromCharCode(65 + oIdx)}) ${esc(opt)}\n`;
           });
           plainText += '\n';
         });

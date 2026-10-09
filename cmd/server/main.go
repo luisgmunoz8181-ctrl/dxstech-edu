@@ -80,10 +80,16 @@ func main() {
 
 	// Router setup
 	r := gin.New()
+	// Solo se confía en X-Forwarded-For si la petición llega desde un proxy
+	// declarado; así un cliente no puede falsear su IP para evadir el rate limit.
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		log.Fatalf("❌ TRUSTED_PROXIES inválido: %v", err)
+	}
 	r.Use(gin.Recovery())
+	r.Use(securityHeadersMiddleware())
 	r.Use(safeLoggerMiddleware())
 	r.Use(corsMiddleware(cfg.AllowedOrigins()))
-	r.Use(auth.Authenticate(cfg.JWTSecret))
+	r.Use(auth.Authenticate(cfg.JWTSecret, auth.NewSessionLookup(db)))
 
 	// Set max multipart memory (25 MB)
 	r.MaxMultipartMemory = 25 << 20
@@ -123,8 +129,11 @@ func main() {
 	// Serve Frontend Static SPA & Uploads
 	uploadsDir := filepath.Join(cfg.DataDir, "uploads")
 	_ = os.MkdirAll(uploadsDir, 0755)
+	// nosniff (global) + extensiones/magic bytes validados al subir evitan que un archivo se interprete como HTML/JS.
 	r.Static("/uploads", uploadsDir)
 	r.Static("/js", "./web/js")
+	r.Static("/css", "./web/css")
+	r.Static("/vendor", "./web/vendor")
 	r.StaticFile("/favicon.ico", "./web/favicon.ico")
 
 	// SPA Fallback: any non-API route serves index.html
@@ -200,6 +209,17 @@ func corsMiddleware(allowedOrigins []string) gin.HandlerFunc {
 			c.AbortWithStatus(204)
 			return
 		}
+		c.Next()
+	}
+}
+
+// securityHeadersMiddleware añade cabeceras defensivas a todas las respuestas.
+func securityHeadersMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "SAMEORIGIN")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Next()
 	}
 }

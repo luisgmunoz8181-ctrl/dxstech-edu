@@ -139,12 +139,25 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 | `JWT_SECRET` | *(obligatorio)* | Secreto de sesión, mínimo 32 caracteres (`openssl rand -hex 32`). El servidor no arranca en producción sin él |
 | `APP_URL` | `https://edu.tuempresa.com` | URL pública (CORS y enlaces de verificación) |
 | `CORS_ORIGINS` | *(vacío)* | Orígenes extra permitidos con credenciales, separados por coma |
+| `TRUSTED_PROXIES` | rangos privados | IP/CIDR de proxies inversos de confianza (separados por coma, o `none`). Solo de ellos se acepta `X-Forwarded-For`, lo que evita falsear la IP para evadir el límite de intentos de login |
 | `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` | opcional | Primer SUPERADMIN. Sin contraseña se genera una aleatoria y se imprime una sola vez en el log; debe cambiarse al ingresar |
 
 ### Paso 5: Dominio y SSL
 1. Asigna tu dominio en Coolify (por ejemplo `https://edu.tuempresa.com`).
 2. Coolify generará y renovará automáticamente los certificados SSL con Let's Encrypt.
 3. El generador de certificados detectará automáticamente el dominio HTTPS público a través del encabezado `X-Forwarded-Proto`, generando los códigos QR con la URL definitiva de verificación.
+
+---
+
+## 🎨 Estilos y librerías del frontend
+
+El frontend **no depende de CDNs en tiempo de ejecución**: Tailwind se compila a `web/css/tailwind.css`, y Lucide y SheetJS se sirven desde `web/vendor/` con versión fija.
+Si agregas clases de Tailwind nuevas, regenera el CSS y súbelo al repositorio:
+
+```bash
+pnpm install
+pnpm build:css
+```
 
 ---
 

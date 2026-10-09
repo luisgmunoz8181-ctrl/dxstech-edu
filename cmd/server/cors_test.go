@@ -36,3 +36,30 @@ func TestCORSOnlyAllowsConfiguredOrigins(t *testing.T) {
 		t.Errorf("nunca debe usarse comodín")
 	}
 }
+
+func TestClientIPIgnoresSpoofedForwardedForFromUntrustedPeer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	build := func(trusted []string) *gin.Engine {
+		r := gin.New()
+		_ = r.SetTrustedProxies(trusted)
+		r.GET("/ip", func(c *gin.Context) { c.String(200, c.ClientIP()) })
+		return r
+	}
+	ask := func(r *gin.Engine, remote string) string {
+		req, _ := http.NewRequest("GET", "/ip", nil)
+		req.RemoteAddr = remote
+		req.Header.Set("X-Forwarded-For", "6.6.6.6")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		return w.Body.String()
+	}
+
+	// Cliente directo de internet (no es proxy de confianza): el header se ignora.
+	if got := ask(build([]string{"10.0.0.0/8"}), "203.0.113.9:5555"); got != "203.0.113.9" {
+		t.Errorf("IP falseable desde un peer no confiable: %q", got)
+	}
+	// Detrás de un proxy privado declarado: se respeta el reenvío.
+	if got := ask(build([]string{"10.0.0.0/8"}), "10.1.2.3:5555"); got != "6.6.6.6" {
+		t.Errorf("con proxy de confianza debe usarse X-Forwarded-For, obtuvo %q", got)
+	}
+}

@@ -1,6 +1,7 @@
 package database
 
 import (
+	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
@@ -228,6 +229,7 @@ func runMigrations(db *sql.DB, seedDemo bool) error {
 	}
 
 	// Migración incremental segura para issued_certificates
+	_, _ = db.Exec("ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0;")
 	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN user_id TEXT;")
 	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN course_id TEXT;")
 	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN duration_hours REAL DEFAULT 0.0;")
@@ -542,4 +544,21 @@ func seedDemoEnrollments(db *sql.DB) error {
 	`)
 
 	return err
+}
+
+// UserCanAccessCourse indica si el usuario puede acceder al contenido
+// interactivo de un curso (foro, tutor, reseñas): administradores siempre;
+// estudiantes solo si están matriculados (y no han abandonado el curso).
+func (d *DB) UserCanAccessCourse(ctx context.Context, userID, role, courseID string) bool {
+	if role == "SUPERADMIN" || role == "ADMINISTRADOR" {
+		return true
+	}
+	if userID == "" || courseID == "" {
+		return false
+	}
+	var n int
+	err := d.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM enrollments WHERE user_id = ? AND course_id = ? AND status != 'dropped'`,
+		userID, courseID).Scan(&n)
+	return err == nil && n > 0
 }

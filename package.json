@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "go run ./cmd/server --dev",
     "build": "go build -o bin/server.exe ./cmd/server",
-    "start": "go run ./cmd/server"
+    "start": "go run ./cmd/server",
+    "build:css": "tailwindcss -c tailwind.config.js -i web/css/tailwind.input.css -o web/css/tailwind.css --minify"
   },
   "keywords": [
     "education",
@@ -17,5 +18,8 @@
     "ai"
   ],
   "author": "DxSTech",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
 }

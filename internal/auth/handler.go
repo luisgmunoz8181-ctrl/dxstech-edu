@@ -104,6 +104,11 @@ func (h *Handler) HandleChangePassword(c *gin.Context) {
 		return
 	}
 
+	// El cambio invalida los tokens anteriores: se emite uno nuevo para esta sesión.
+	if token, err := h.svc.IssueToken(c.Request.Context(), userID, 24*time.Hour); err == nil {
+		SetAuthCookie(c, token, 86400, h.isProd)
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Contraseña actualizada con éxito"})
 }
 

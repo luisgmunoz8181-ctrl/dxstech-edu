@@ -23,7 +23,14 @@ type Config struct {
 	// con credenciales. La SPA se sirve desde el mismo origen, por lo que por
 	// defecto solo se permite AppURL.
 	CORSOrigins []string
+
+	// TrustedProxies son las IP/CIDR de proxies inversos cuyas cabeceras
+	// X-Forwarded-* se aceptan. Por defecto, los rangos privados/loopback
+	// (Docker, Coolify, Render). Con "none" no se confía en ninguno.
+	TrustedProxies []string
 }
+
+var defaultTrustedProxies = []string{"127.0.0.1/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"}
 
 func Load() *Config {
 	env := os.Getenv("APP_ENV")
@@ -63,14 +70,27 @@ func Load() *Config {
 		}
 	}
 
+	trustedProxies := defaultTrustedProxies
+	if raw := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES")); raw != "" {
+		trustedProxies = nil
+		if strings.ToLower(raw) != "none" {
+			for _, p := range strings.Split(raw, ",") {
+				if p = strings.TrimSpace(p); p != "" {
+					trustedProxies = append(trustedProxies, p)
+				}
+			}
+		}
+	}
+
 	return &Config{
-		AppEnv:      env,
-		Port:        port,
-		Host:        host,
-		DataDir:     dataDir,
-		JWTSecret:   jwtSecret,
-		AppURL:      strings.TrimRight(appURL, "/"),
-		CORSOrigins: corsOrigins,
+		TrustedProxies: trustedProxies,
+		AppEnv:         env,
+		Port:           port,
+		Host:           host,
+		DataDir:        dataDir,
+		JWTSecret:      jwtSecret,
+		AppURL:         strings.TrimRight(appURL, "/"),
+		CORSOrigins:    corsOrigins,
 	}
 }
 

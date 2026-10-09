@@ -1,8 +1,11 @@
 package courses
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -658,6 +661,10 @@ func (s *Service) DeleteLesson(ctx context.Context, lessonID string) error {
 
 // File Upload Handler
 
+const maxUploadBytes = 25 * 1024 * 1024
+
+// allowedExts lista las extensiones admitidas. SVG se excluye a propósito: es
+// XML con scripts embebibles y, servido desde el mismo origen, permitiría XSS.
 var allowedExts = map[string]bool{
 	".pdf":  true,
 	".pptx": true,
@@ -668,17 +675,42 @@ var allowedExts = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
 	".webp": true,
-	".svg":  true,
+}
+
+// matchesMagic comprueba que los primeros bytes del archivo correspondan al
+// formato que declara la extensión, para no confiar en el nombre del cliente.
+func matchesMagic(ext string, head []byte) bool {
+	has := func(off int, sig string) bool {
+		return len(head) >= off+len(sig) && string(head[off:off+len(sig)]) == sig
+	}
+	switch ext {
+	case ".pdf":
+		return has(0, "%PDF-")
+	case ".pptx":
+		return has(0, "PK\x03\x04")
+	case ".ppt":
+		return has(0, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
+	case ".mp4":
+		return has(4, "ftyp")
+	case ".webm":
+		return has(0, "\x1A\x45\xDF\xA3")
+	case ".png":
+		return has(0, "\x89PNG\r\n\x1a\n")
+	case ".jpg", ".jpeg":
+		return has(0, "\xFF\xD8\xFF")
+	case ".webp":
+		return has(0, "RIFF") && has(8, "WEBP")
+	}
+	return false
 }
 
 func (s *Service) SaveUpload(fileHeader *multipart.FileHeader) (string, error) {
 	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
 	if !allowedExts[ext] {
-		return "", fmt.Errorf("formato no permitido (%s). Se admiten: PDF, PPTX, MP4, WEBM, PNG, JPG, WEBP", ext)
+		return "", fmt.Errorf("formato no permitido (%s). Se admiten: PDF, PPT/PPTX, MP4, WEBM, PNG, JPG, WEBP", ext)
 	}
 
-	// Maximum upload size: 25MB
-	if fileHeader.Size > 25*1024*1024 {
+	if fileHeader.Size > maxUploadBytes {
 		return "", errors.New("el archivo excede el tamaño máximo permitido de 25 MB")
 	}
 
@@ -688,20 +720,36 @@ func (s *Service) SaveUpload(fileHeader *multipart.FileHeader) (string, error) {
 	}
 	defer src.Close()
 
-	// Safe filename
-	cleanBase := filepath.Base(fileHeader.Filename)
-	cleanBase = strings.ReplaceAll(cleanBase, " ", "_")
-	uniqueName := fmt.Sprintf("%d-%s", time.Now().UnixNano(), cleanBase)
+	// Valida el contenido real (magic bytes) antes de escribir nada en disco.
+	head := make([]byte, 16)
+	n, _ := io.ReadFull(src, head)
+	head = head[:n]
+	if !matchesMagic(ext, head) {
+		return "", fmt.Errorf("el contenido del archivo no corresponde a un %s válido", strings.ToUpper(strings.TrimPrefix(ext, ".")))
+	}
+
+	// Nombre generado por el servidor: aleatorio, sin depender del nombre del cliente.
+	rnd := make([]byte, 16)
+	if _, err := rand.Read(rnd); err != nil {
+		return "", fmt.Errorf("error generando nombre de archivo: %w", err)
+	}
+	uniqueName := hex.EncodeToString(rnd) + ext
 	destPath := filepath.Join(s.uploadDir, uniqueName)
 
-	dst, err := os.Create(destPath)
+	dst, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		return "", fmt.Errorf("error al guardar archivo en el servidor: %w", err)
 	}
-	defer dst.Close()
 
-	if _, err := io.Copy(dst, src); err != nil {
-		return "", fmt.Errorf("error al escribir contenido: %w", err)
+	// El tamaño declarado por el cliente no es fiable: se limita lo realmente copiado.
+	written, err := io.Copy(dst, io.MultiReader(bytes.NewReader(head), io.LimitReader(src, maxUploadBytes+1)))
+	closeErr := dst.Close()
+	if err != nil || closeErr != nil || written > maxUploadBytes {
+		_ = os.Remove(destPath)
+		if written > maxUploadBytes {
+			return "", errors.New("el archivo excede el tamaño máximo permitido de 25 MB")
+		}
+		return "", errors.New("error al escribir el contenido del archivo")
 	}
 
 	return "/uploads/" + uniqueName, nil
