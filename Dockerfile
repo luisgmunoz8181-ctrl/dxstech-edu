@@ -1,7 +1,13 @@
+# Registro de las imágenes base. Docker Hub limita las descargas anónimas (HTTP 429)
+# y en CI eso rompe el build de forma intermitente: allí se usa mirror.gcr.io, que
+# sirve las mismas imágenes (mismos digests) sin ese límite:
+#   docker build --build-arg REGISTRY=mirror.gcr.io/library .
+ARG REGISTRY=docker.io/library
+
 # ==============================================================================
 # Stage 1: Build static Go binary
 # ==============================================================================
-FROM golang:1.24-alpine AS builder
+FROM ${REGISTRY}/golang:1.24-alpine AS builder
 
 WORKDIR /src
 
@@ -25,7 +31,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # ==============================================================================
 # Stage 2: Minimal, secure production runtime
 # ==============================================================================
-FROM alpine:3.21
+FROM ${REGISTRY}/alpine:3.21
 
 WORKDIR /app
 

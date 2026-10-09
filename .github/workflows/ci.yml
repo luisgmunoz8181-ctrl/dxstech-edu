@@ -98,7 +98,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Construir la imagen
-        run: docker build -t dxstech-edu:ci .
+        # mirror.gcr.io sirve las mismas imágenes base que Docker Hub sin su límite de
+        # descargas anónimas (429/504 intermitentes en runners compartidos); además se reintenta.
+        run: |
+          for attempt in 1 2 3; do
+            if docker build --build-arg REGISTRY=mirror.gcr.io/library -t dxstech-edu:ci .; then exit 0; fi
+            echo "Intento $attempt fallido; reintentando en 20 s..."
+            sleep 20
+          done
+          exit 1
       - name: Humo - arranca como no-root con un volumen que pertenece a root
         run: |
           set -euo pipefail
