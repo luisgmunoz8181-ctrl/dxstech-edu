@@ -155,6 +155,22 @@ export const communityMethods = {
     if (!this.selectedCourse) return;
     const course = this.selectedCourse;
     const lesson = this.selectedLesson;
+    const me = window.router?.currentUser;
+    const isAdmin = ['SUPERADMIN', 'ADMINISTRADOR'].includes(me?.role);
+
+    // Acciones de moderación de una publicación: eliminar (autor o admin) y reportar (ajenas).
+    const postActions = (p) => {
+      const own = p.userId === me?.id;
+      return `
+        <span class="inline-flex items-center gap-2">
+          ${(own || isAdmin) ? `<button data-delete-post="${esc(p.id)}" class="text-[10px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer">Eliminar</button>` : ''}
+          ${!own ? `<button data-report-post="${esc(p.id)}" class="text-[10px] font-semibold text-slate-400 hover:text-amber-700 cursor-pointer">Reportar</button>` : ''}
+        </span>
+        <div id="report-form-${esc(p.id)}" class="hidden mt-1 flex gap-1.5">
+          <input type="text" maxlength="300" id="report-reason-${esc(p.id)}" placeholder="Motivo del reporte (opcional)" class="flex-1 rounded-lg border border-slate-200 px-2 py-1 text-[11px] bg-white">
+          <button data-send-report="${esc(p.id)}" class="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] cursor-pointer">Enviar reporte</button>
+        </div>`;
+    };
 
     Loading.show('Cargando foro de dudas...');
     let discussions = [];
@@ -230,13 +246,15 @@ export const communityMethods = {
                           <span class="text-[10px] text-slate-400">${new Date(r.createdAt).toLocaleDateString()}</span>
                         </div>
                         <p class="text-slate-600">${esc(r.message).replace(/\n/g, '<br>')}</p>
+                        <div class="mt-1 flex flex-col items-end">${postActions(r)}</div>
                       </div>
                     `).join('')}
                   </div>
                 ` : ''}
 
                 <!-- Reply trigger -->
-                <div class="pt-1 flex justify-end">
+                <div class="pt-1 flex items-center justify-end gap-3">
+                  ${postActions(d)}
                   <button data-reply-to="${esc(d.id)}" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer">
                     <i data-lucide="corner-down-right" class="w-3 h-3"></i> Responder
                   </button>
@@ -289,6 +307,53 @@ export const communityMethods = {
         } catch (err) {
           Toast.error(err.message);
         }
+      });
+
+      // Moderación: eliminar con doble confirmación en línea (sin diálogos nativos)
+      document.querySelectorAll('[data-delete-post]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (btn.dataset.confirming !== 'true') {
+            btn.dataset.confirming = 'true';
+            btn.textContent = '¿Seguro? Confirmar';
+            return;
+          }
+          try {
+            const res = await fetch(`/api/courses/${encodeURIComponent(course.id)}/discussions/${encodeURIComponent(btn.dataset.deletePost)}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            Toast.success('Publicación eliminada');
+            Modal.close();
+            this.openDiscussionsModal();
+          } catch (err) {
+            Toast.error(err.message);
+          }
+        });
+      });
+
+      // Moderación: reportar una publicación ajena
+      document.querySelectorAll('[data-report-post]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.getElementById(`report-form-${esc(btn.dataset.reportPost)}`)?.classList.toggle('hidden');
+        });
+      });
+      document.querySelectorAll('[data-send-report]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.dataset.sendReport;
+          const reason = document.getElementById(`report-reason-${esc(id)}`)?.value.trim() || '';
+          try {
+            const res = await fetch(`/api/courses/${encodeURIComponent(course.id)}/discussions/${encodeURIComponent(id)}/report`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ reason }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            Toast.success(data.message);
+            document.getElementById(`report-form-${esc(id)}`)?.classList.add('hidden');
+          } catch (err) {
+            Toast.error(err.message);
+          }
+        });
       });
 
       // Bind reply toggle

@@ -49,6 +49,31 @@ var migrations = []migration{
 		_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_discussions_parent ON course_discussions(course_id, parent_id)`)
 		return err
 	}},
+	{6, "forum_reports", func(tx *sql.Tx) error {
+		// Los reportes guardan una copia del mensaje y no tienen clave foránea hacia
+		// course_discussions: si un moderador elimina la publicación, el historial se conserva.
+		_, err := tx.Exec(`
+		CREATE TABLE IF NOT EXISTS discussion_reports (
+			id TEXT PRIMARY KEY,
+			discussion_id TEXT NOT NULL,
+			course_id TEXT NOT NULL,
+			reporter_id TEXT NOT NULL,
+			reporter_name TEXT NOT NULL DEFAULT '',
+			reason TEXT NOT NULL DEFAULT '',
+			post_author_id TEXT NOT NULL DEFAULT '',
+			post_author_name TEXT NOT NULL DEFAULT '',
+			post_message TEXT NOT NULL DEFAULT '',
+			status TEXT NOT NULL DEFAULT 'open',
+			resolved_by TEXT,
+			resolved_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE (discussion_id, reporter_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_discussion_reports_status ON discussion_reports(status, created_at);
+		CREATE INDEX IF NOT EXISTS idx_discussion_reports_discussion ON discussion_reports(discussion_id);
+		`)
+		return err
+	}},
 }
 
 func migrate(db *sql.DB) error {

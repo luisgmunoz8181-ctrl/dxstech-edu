@@ -35,6 +35,9 @@ type User struct {
 	UpdatedAt          time.Time  `json:"updatedAt"`
 	PasswordChangedAt  *time.Time `json:"passwordChangedAt,omitempty"`
 	TokenVersion       int        `json:"-"`
+	// LockedUntil solo se rellena en el listado de administración: cuenta bloqueada
+	// temporalmente por intentos fallidos si es una fecha futura.
+	LockedUntil *time.Time `json:"lockedUntil,omitempty"`
 }
 
 type LoginRequest struct {

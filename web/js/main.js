@@ -7,6 +7,7 @@ import { CertificatesView } from './views/certificates.js';
 import { QuizzesView } from './views/quizzes.js';
 import { WhatsAppView } from './views/whatsapp.js';
 import { SettingsView } from './views/settings.js';
+import { AdminView } from './views/admin.js';
 import { Modal } from './components/modal.js';
 import { Toast } from './components/toast.js';
 import { esc } from './utils/escape.js';
@@ -23,6 +24,7 @@ class AppRouter {
       quizzes: QuizzesView,
       whatsapp: WhatsAppView,
       settings: SettingsView,
+      admin: AdminView,
     };
 
     this.viewTitles = {
@@ -34,6 +36,7 @@ class AppRouter {
       certificates: { title: 'Certificados', subtitle: 'Generación masiva y diseño interactivo en alta fidelidad' },
       quizzes: { title: 'Evaluaciones IA', subtitle: 'Generador inteligente con Gemini y simulador de exámenes' },
       whatsapp: { title: 'WhatsApp + Chatbot IA', subtitle: 'Gateway automatizado con base de conocimiento estricta' },
+      admin: { title: 'Administración', subtitle: 'Auditoría de acciones, moderación del foro y copias de seguridad' },
       settings: { title: 'Configuración & Seguridad', subtitle: 'Gestión local de tu Gemini API Key (BYOK)' },
     };
 
@@ -172,7 +175,7 @@ class AppRouter {
       if (mobileDashBtn) mobileDashBtn.style.display = isAdmin ? 'flex' : 'none';
       if (usersNavBtn) usersNavBtn.style.display = isAdmin ? 'flex' : 'none';
       if (mobileUsersBtn) mobileUsersBtn.style.display = isAdmin ? 'flex' : 'none';
-      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"]').forEach((btn) => {
+      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"], [data-nav="admin"]').forEach((btn) => {
         btn.style.display = isAdmin ? 'flex' : 'none';
       });
     } else {
@@ -196,7 +199,7 @@ class AppRouter {
       if (mobileDashBtn) mobileDashBtn.style.display = 'none';
       if (usersNavBtn) usersNavBtn.style.display = 'none';
       if (mobileUsersBtn) mobileUsersBtn.style.display = 'none';
-      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"]').forEach((btn) => {
+      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"], [data-nav="admin"]').forEach((btn) => {
         btn.style.display = 'none';
       });
     }
@@ -217,7 +220,7 @@ class AppRouter {
     }
 
     // RBAC Protection guards
-    if (viewId === 'dashboard' || viewId === 'users' || viewId === 'quizzes' || viewId === 'whatsapp') {
+    if (viewId === 'dashboard' || viewId === 'users' || viewId === 'quizzes' || viewId === 'whatsapp' || viewId === 'admin') {
       if (!this.currentUser) {
         Toast.info('Inicia sesión con credenciales de administrador para acceder a este módulo.');
         this.navigate('login');

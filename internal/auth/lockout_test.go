@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"dxstech-edu/internal/auth"
 )
@@ -141,5 +142,40 @@ func TestIPRateLimitCountsOnlyFailures(t *testing.T) {
 	// Con la IP limitada, ni un acceso correcto pasa hasta que expire la ventana.
 	if code, _ := e.tryLogin(t, "estudiante@dxstech.edu", "Student1234*"); code != http.StatusTooManyRequests {
 		t.Fatalf("IP limitada: esperado 429, obtuvo %d", code)
+	}
+}
+
+func TestUserListShowsLockedAccountsToAdmins(t *testing.T) {
+	e, cleanup := newSessionEnv(t)
+	defer cleanup()
+	for i := 0; i < 5; i++ {
+		e.tryLogin(t, "estudiante@dxstech.edu", "incorrecta")
+	}
+	users, err := e.svc.ListUsers(context.Background(), 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	locked, others := 0, 0
+	for _, u := range users {
+		if u.Email == "estudiante@dxstech.edu" {
+			if u.LockedUntil == nil || !u.LockedUntil.After(time.Now()) {
+				t.Errorf("la cuenta bloqueada debe mostrar lockedUntil futuro: %+v", u.LockedUntil)
+			}
+			locked++
+		} else if u.LockedUntil != nil {
+			others++
+		}
+	}
+	if locked != 1 || others != 0 {
+		t.Errorf("bloqueadas=%d, otras con bloqueo=%d", locked, others)
+	}
+	if _, err := e.svc.UnlockUser(context.Background(), "usr-admin-01", "usr-student-01", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	users, _ = e.svc.ListUsers(context.Background(), 0, "")
+	for _, u := range users {
+		if u.LockedUntil != nil {
+			t.Errorf("tras desbloquear no debe haber cuentas bloqueadas: %s", u.Email)
+		}
 	}
 }

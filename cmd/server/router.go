@@ -87,6 +87,7 @@ func newRouter(cfg *config.Config, db *database.DB, backupSvc *backup.Service) (
 
 		authHandler.RegisterRoutes(api.Group("/auth"))
 		courseHandler.RegisterRoutes(api.Group("/courses"))
+		courseHandler.RegisterModerationRoutes(api.Group("/admin/forum"))
 		enrollHandler.RegisterRoutes(api.Group("/enrollments"))
 		certService.RegisterRoutes(api.Group("/certificates"))
 		quizService.RegisterRoutes(api.Group("/quizzes"))

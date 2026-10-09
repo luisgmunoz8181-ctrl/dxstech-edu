@@ -373,7 +373,8 @@ func (s *Service) ListUsers(ctx context.Context, roleFilter int, search string) 
 	query := `
 		SELECT u.id, u.first_name, u.last_name, u.email, u.role_id,
 		       r.name as role_name, u.status, u.email_verified, u.must_change_password,
-		       u.identification, u.company, u.job_title, u.last_login, u.created_at, u.updated_at
+		       u.identification, u.company, u.job_title, u.last_login, u.created_at, u.updated_at,
+		       u.locked_until
 		FROM users u
 		JOIN roles r ON u.role_id = r.id
 		WHERE 1=1
@@ -402,15 +403,20 @@ func (s *Service) ListUsers(ctx context.Context, roleFilter int, search string) 
 	var users []User
 	for rows.Next() {
 		var u User
-		var lastLogin sql.NullTime
+		var lastLogin, lockedUntil sql.NullTime
 		var iden, comp, job sql.NullString
 
 		if err := rows.Scan(
 			&u.ID, &u.FirstName, &u.LastName, &u.Email, &u.RoleID,
 			&u.Role, &u.Status, &u.EmailVerified, &u.MustChangePassword,
 			&iden, &comp, &job, &lastLogin, &u.CreatedAt, &u.UpdatedAt,
+			&lockedUntil,
 		); err != nil {
 			continue
+		}
+		if lockedUntil.Valid && lockedUntil.Time.After(time.Now()) {
+			t := lockedUntil.Time
+			u.LockedUntil = &t
 		}
 
 		if iden.Valid {

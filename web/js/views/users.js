@@ -156,6 +156,11 @@ export const UsersView = {
         ? '<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Activo</span>'
         : '<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700"><span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>Inactivo</span>';
 
+      const isLocked = u.lockedUntil && new Date(u.lockedUntil) > new Date();
+      const lockedBadge = isLocked
+        ? `<span class="ml-2 inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded" title="Bloqueada hasta ${esc(new Date(u.lockedUntil).toLocaleTimeString())} por intentos fallidos">🔒 Bloqueada</span>`
+        : '';
+
       const lastLoginText = u.lastLogin ? new Date(u.lastLogin).toLocaleDateString() : 'Nunca';
 
       return `
@@ -172,13 +177,14 @@ export const UsersView = {
             </div>
           </td>
           <td class="py-3 px-4">${roleBadge}</td>
-          <td class="py-3 px-4">${statusBadge}</td>
+          <td class="py-3 px-4">${statusBadge}${lockedBadge}</td>
           <td class="py-3 px-4 text-slate-600">
             <p class="font-medium">${esc(u.company || '—')}</p>
             <p class="text-[10px] text-slate-400">${esc(u.jobTitle || '')}</p>
           </td>
           <td class="py-3 px-4 text-slate-500 text-[11px]">${lastLoginText}</td>
-          <td class="py-3 px-5 text-right">
+          <td class="py-3 px-5 text-right space-x-1.5 whitespace-nowrap">
+            ${isLocked ? `<button data-unlock-id="${esc(u.id)}" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors">Desbloquear</button>` : ''}
             <button data-toggle-id="${esc(u.id)}" class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${u.status === 'active' ? 'text-amber-700 bg-amber-50 hover:bg-amber-100' : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'} transition-colors">
               ${u.status === 'active' ? 'Desactivar' : 'Activar'}
             </button>
@@ -189,6 +195,10 @@ export const UsersView = {
 
     tbody.innerHTML = rows;
 
+    tbody.querySelectorAll('[data-unlock-id]').forEach(btn => {
+      btn.addEventListener('click', () => this.unlockUser(btn.dataset.unlockId));
+    });
+
     // Bind Toggle Status Handlers
     tbody.querySelectorAll('[data-toggle-id]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -198,6 +208,18 @@ export const UsersView = {
     });
 
     if (window.lucide) window.lucide.createIcons();
+  },
+
+  async unlockUser(id) {
+    try {
+      const res = await fetch(`/api/auth/users/${encodeURIComponent(id)}/unlock`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      Toast.success('Cuenta desbloqueada');
+      await this.fetchUsers();
+    } catch (e) {
+      Toast.error(e.message);
+    }
   },
 
   async toggleUserStatus(id) {

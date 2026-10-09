@@ -144,6 +144,7 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 | `APP_URL` | `https://edu.tuempresa.com` | URL pública (CORS y enlaces de verificación) |
 | `CORS_ORIGINS` | *(vacío)* | Orígenes extra permitidos con credenciales, separados por coma |
 | `TRUSTED_PROXIES` | rangos privados | IP/CIDR de proxies inversos de confianza (separados por coma, o `none`). Solo de ellos se acepta `X-Forwarded-For`, lo que evita falsear la IP para evadir el límite de intentos de login |
+| `BACKUP_ENABLED` / `BACKUP_INTERVAL_HOURS` / `BACKUP_RETENTION` / `BACKUP_DIR` | `true` / `24` / `7` / `$DATA_DIR/backups` | Copias de seguridad automáticas (ver *Copias de seguridad*) |
 | `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` | opcional | Primer SUPERADMIN. Sin contraseña se genera una aleatoria y se imprime una sola vez en el log; debe cambiarse al ingresar |
 
 ### Paso 5: Dominio y SSL
@@ -169,7 +170,27 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 - **Contraseñas:** mínimo 10 caracteres (y máximo 72 bytes por el límite de bcrypt), con mayúscula, minúscula y número; se rechazan las contraseñas comunes y las que contienen el nombre o el correo del usuario. Los usuarios creados por un administrador deben cambiar su contraseña en el primer ingreso.
 - **Bloqueo de cuentas:** tras 5 contraseñas incorrectas la cuenta se bloquea 15 minutos (también en el cambio de contraseña). Un administrador puede desbloquearla con `POST /api/auth/users/:id/unlock`, o el usuario restableciendo su contraseña. Además, cada IP tiene un límite de 20 fallos por minuto (solo cuentan los fallos, así que un aula o una oficina con una sola IP pública no se bloquea sola).
 - **Logs estructurados:** JSON en producción (texto legible con `--dev`), una línea por petición con `request_id`, usuario, rol, estado y latencia; nunca se registran query strings ni claves. Cada respuesta incluye la cabecera `X-Request-ID`, y los errores internos devuelven ese identificador para que soporte pueda rastrear el problema.
+- **Acceso a evaluaciones y certificados:** un estudiante solo ve y responde las evaluaciones de los cursos en los que está matriculado (el curso y la lección de cada intento salen de la evaluación guardada, no de lo que envíe el cliente). El PDF de un certificado solo lo descarga su titular o un administrador; la verificación pública (`/#verify/CÓDIGO`) devuelve únicamente nombre, curso, horas, docente y fecha, y limita por IP los códigos inexistentes para impedir la enumeración.
+- **Foro y moderación:** el autor o un administrador pueden eliminar una publicación (con sus respuestas); cualquier estudiante matriculado puede reportar publicaciones ajenas. Los administradores revisan la cola en **Administración → Moderación del foro** (descartar el reporte o eliminar la publicación). El historial de reportes conserva el mensaje aunque se elimine.
 - **Auditoría:** además del acceso y la gestión de usuarios, se registran cursos, módulos, lecciones, subidas de archivos, certificados, evaluaciones, matrículas administrativas y WhatsApp. Los administradores pueden consultarla en `GET /api/admin/audit` (filtros `action`, `userId`, `search`, `limit`, `offset`).
+
+---
+
+## 💾 Copias de seguridad
+
+El servidor crea automáticamente una copia de la base de datos SQLite (instantánea consistente, sin detener la aplicación) y de los archivos subidos, en `BACKUP_DIR` (por defecto `/app/data/backups`). Comprueba cada hora y crea una nueva solo si la última es más antigua que `BACKUP_INTERVAL_HOURS` (24 h por defecto); se conservan las últimas `BACKUP_RETENTION` (7).
+
+- **Ver, crear y descargar:** **Administración → Copias de seguridad** (solo SUPERADMIN) o `GET/POST /api/admin/backups` y `GET /api/admin/backups/:nombre`. Cada creación y descarga queda auditada.
+- **Guárdalas fuera del servidor.** Si el disco se pierde, se pierden también las copias que están en él. Descarga una periódicamente (o monta `BACKUP_DIR` en un volumen o disco distinto). Contienen datos personales y contraseñas cifradas: trátalas como confidenciales.
+- **Restaurar** (con el servidor **detenido**):
+
+  ```bash
+  dxstech-server -restore /ruta/dxstech-backup-AAAAMMDD-HHMMSS.tar.gz -yes
+  # Con Docker:
+  docker run --rm -v dxstech_data:/app/data dxstech-edu /app/dxstech-server -restore /app/data/backups/ARCHIVO.tar.gz -yes
+  ```
+
+  Antes de tocar nada se verifica el hash y la integridad de la base (`PRAGMA integrity_check`); lo que había se conserva en `DATA_DIR/pre-restore-<fecha>/` y nunca se borra.
 
 ---
 

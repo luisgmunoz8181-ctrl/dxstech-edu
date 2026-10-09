@@ -103,17 +103,21 @@ var routeAccess = map[string]access{
 	"GET /api/whatsapp/logs":           admin,
 	"DELETE /api/whatsapp/logs":        admin,
 
-	"GET /api/admin/metrics/overview":             admin,
-	"GET /api/admin/metrics/courses":              admin,
-	"GET /api/admin/metrics/timeline/users":       admin,
-	"GET /api/admin/metrics/timeline/enrollments": admin,
-	"GET /api/admin/monitoring/students":          admin,
-	"GET /api/admin/reports/enrollments.csv":      admin,
-	"GET /api/admin/reports/certificates.csv":     admin,
-	"GET /api/admin/audit":                        admin,
-	"GET /api/admin/backups":                      superadmin,
-	"POST /api/admin/backups":                     superadmin,
-	"GET /api/admin/backups/:name":                superadmin,
+	"GET /api/admin/metrics/overview":                        admin,
+	"GET /api/admin/metrics/courses":                         admin,
+	"GET /api/admin/metrics/timeline/users":                  admin,
+	"GET /api/admin/metrics/timeline/enrollments":            admin,
+	"GET /api/admin/monitoring/students":                     admin,
+	"GET /api/admin/reports/enrollments.csv":                 admin,
+	"GET /api/admin/reports/certificates.csv":                admin,
+	"DELETE /api/courses/:id/discussions/:discussionId":      authed, // solo su autor o un admin
+	"POST /api/courses/:id/discussions/:discussionId/report": enrolled,
+	"GET /api/admin/forum/reports":                           admin,
+	"POST /api/admin/forum/reports/:reportId/resolve":        admin,
+	"GET /api/admin/audit":                                   admin,
+	"GET /api/admin/backups":                                 superadmin,
+	"POST /api/admin/backups":                                superadmin,
+	"GET /api/admin/backups/:name":                           superadmin,
 }
 
 type routeEnv struct {

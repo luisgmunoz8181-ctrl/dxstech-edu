@@ -24,6 +24,8 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	r.GET("/:id", h.HandleGetCourse)
 	r.GET("/:id/discussions", auth.RequireAuth(), h.HandleGetDiscussions)
 	r.POST("/:id/discussions", auth.RequireAuth(), h.HandleCreateDiscussion)
+	r.DELETE("/:id/discussions/:discussionId", auth.RequireAuth(), h.HandleDeleteDiscussion)
+	r.POST("/:id/discussions/:discussionId/report", auth.RequireAuth(), h.HandleReportDiscussion)
 	r.GET("/:id/reviews", h.HandleGetReviews)
 	r.POST("/:id/reviews", auth.RequireAuth(), h.HandleCreateReview)
 	r.GET("/:id/tutor-context", auth.RequireAuth(), h.HandleGetTutorContext)
