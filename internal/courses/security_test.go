@@ -2,6 +2,7 @@ package courses_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"mime/multipart"
 	"net/http"
@@ -169,5 +170,69 @@ func TestForumTutorAndReviewsRequireEnrollment(t *testing.T) {
 	// Las reseñas siguen siendo de lectura pública (catálogo).
 	if c := call("GET", "/api/courses/crs-ai-101/reviews", "", ""); c != http.StatusOK {
 		t.Errorf("GET reseñas público: esperado 200, obtuvo %d", c)
+	}
+}
+
+func TestForumThreadsAndReplies(t *testing.T) {
+	db, dir, cleanup := setupTestDB(t)
+	defer cleanup()
+	svc := courses.NewService(db, dir)
+	ctx := context.Background()
+
+	root, err := svc.CreateDiscussion(ctx, "crs-ai-101", "lsn-ai-01", "usr-student-01", "Carlos", "ESTUDIANTE", "¿Cómo funciona un LLM?", "Duda sobre LLM", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root.Title != "Duda sobre LLM" || root.ParentID != "" {
+		t.Fatalf("hilo mal creado: %+v", root)
+	}
+
+	r1, err := svc.CreateDiscussion(ctx, "crs-ai-101", "", "usr-admin-01", "Admin", "ADMINISTRADOR", "Con transformers.", "ignorado", root.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r1.ParentID != root.ID || r1.Title != "" || r1.LessonID != "lsn-ai-01" {
+		t.Fatalf("la respuesta debe heredar hilo y lección y no llevar título: %+v", r1)
+	}
+	// Responder a una respuesta se anida en el hilo raíz.
+	r2, err := svc.CreateDiscussion(ctx, "crs-ai-101", "", "usr-student-01", "Carlos", "ESTUDIANTE", "Gracias", "", r1.ID)
+	if err != nil || r2.ParentID != root.ID {
+		t.Fatalf("respuesta anidada: %+v %v", r2, err)
+	}
+
+	// Otro hilo en otra lección no aparece al filtrar por lsn-ai-01, pero uno general sí.
+	if _, err := svc.CreateDiscussion(ctx, "crs-ai-101", "lsn-ai-02", "usr-student-01", "Carlos", "ESTUDIANTE", "Otra lección", "Otro", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateDiscussion(ctx, "crs-ai-101", "", "usr-student-01", "Carlos", "ESTUDIANTE", "General", "General", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	threads, err := svc.GetDiscussions(ctx, "crs-ai-101", "lsn-ai-01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(threads) != 2 {
+		t.Fatalf("hilos para lsn-ai-01 = %d, esperados 2 (el de la lección y el general)", len(threads))
+	}
+	if len(threads[0].Replies) != 2 || threads[0].Replies[0].Message != "Con transformers." {
+		t.Fatalf("respuestas anidadas incorrectas: %+v", threads[0].Replies)
+	}
+	if all, _ := svc.GetDiscussions(ctx, "crs-ai-101", ""); len(all) != 3 {
+		t.Errorf("sin filtro deben verse los 3 hilos, hay %d", len(all))
+	}
+
+	// Validaciones.
+	if _, err := svc.CreateDiscussion(ctx, "crs-ai-101", "", "u", "n", "ESTUDIANTE", "x", "", "no-existe"); err == nil {
+		t.Error("responder a un hilo inexistente debe fallar")
+	}
+	if _, err := svc.CreateDiscussion(ctx, "crs-dev-201", "", "u", "n", "ESTUDIANTE", "x", "", root.ID); err == nil {
+		t.Error("no se puede responder a un hilo de otro curso")
+	}
+	if _, err := svc.CreateDiscussion(ctx, "crs-ai-101", "", "u", "n", "ESTUDIANTE", strings.Repeat("a", 5001), "", ""); err == nil {
+		t.Error("un mensaje demasiado largo debe rechazarse")
+	}
+	if _, err := svc.CreateDiscussion(ctx, "crs-ai-101", "", "u", "n", "ESTUDIANTE", "ok", strings.Repeat("t", 151), ""); err == nil {
+		t.Error("un título demasiado largo debe rechazarse")
 	}
 }

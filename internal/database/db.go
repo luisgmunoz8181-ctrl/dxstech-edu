@@ -15,6 +15,10 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// BcryptCost es el costo de bcrypt para generar hashes de contraseña. En
+// producción es el valor por defecto; los tests lo reducen para ir más rápido.
+var BcryptCost = bcrypt.DefaultCost
+
 // maxOpenConns es el tamaño del pool de conexiones SQLite (WAL).
 const maxOpenConns = 8
 
@@ -108,7 +112,7 @@ func bootstrapSuperadmin(db *sql.DB) error {
 		generated = true
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
 	if err != nil {
 		return err
 	}
@@ -141,13 +145,13 @@ func seedDefaultUsers(db *sql.DB) error {
 
 	// Hashes de contraseñas de desarrollo para testing inmediato
 	// Admin1234* para Superadmin y Administrador
-	adminHash, err := bcrypt.GenerateFromPassword([]byte("Admin1234*"), bcrypt.DefaultCost)
+	adminHash, err := bcrypt.GenerateFromPassword([]byte("Admin1234*"), BcryptCost)
 	if err != nil {
 		return err
 	}
 
 	// Student1234* para Estudiante
-	studentHash, err := bcrypt.GenerateFromPassword([]byte("Student1234*"), bcrypt.DefaultCost)
+	studentHash, err := bcrypt.GenerateFromPassword([]byte("Student1234*"), BcryptCost)
 	if err != nil {
 		return err
 	}

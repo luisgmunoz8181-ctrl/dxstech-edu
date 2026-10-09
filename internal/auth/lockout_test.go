@@ -56,7 +56,7 @@ func TestAccountLocksAfterRepeatedFailures(t *testing.T) {
 	defer cleanup()
 	const email, good = "estudiante@dxstech.edu", "Student1234*"
 
-	// 4 fallos no bloquean; un acierto reinicia el contador (el límite por IP es de 15/min, por eso se acotan los intentos).
+	// 4 fallos no bloquean; un acierto reinicia el contador.
 	for i := 0; i < 4; i++ {
 		if code, _ := e.tryLogin(t, email, "incorrecta"); code != 401 {
 			t.Fatalf("intento %d: esperado 401, obtuvo %d", i+1, code)
@@ -113,5 +113,33 @@ func TestPasswordChangeFailuresAlsoLock(t *testing.T) {
 	var locked *auth.LockedError
 	if err == nil || !strings.Contains(err.Error(), "bloqueada") {
 		t.Fatalf("tras 5 fallos el cambio de contraseña debe bloquearse, obtuvo %v (%T)", err, locked)
+	}
+}
+
+// Muchos accesos correctos desde una misma IP (un aula, una oficina con NAT) no
+// deben bloquearse entre sí; solo los fallos cuentan para el límite por IP.
+func TestIPRateLimitCountsOnlyFailures(t *testing.T) {
+	e, cleanup := newSessionEnv(t)
+	defer cleanup()
+
+	for i := 0; i < 30; i++ {
+		if code, _ := e.tryLogin(t, "estudiante@dxstech.edu", "Student1234*"); code != 200 {
+			t.Fatalf("acceso correcto #%d bloqueado por el límite de IP: %d", i+1, code)
+		}
+	}
+
+	var last int
+	for i := 0; i < 25; i++ {
+		last, _ = e.tryLogin(t, "noexiste@dxstech.edu", "x")
+		if i < 20 && last != 401 {
+			t.Fatalf("fallo #%d: esperado 401, obtuvo %d", i+1, last)
+		}
+	}
+	if last != http.StatusTooManyRequests {
+		t.Fatalf("tras 20 fallos la IP debe limitarse (429), obtuvo %d", last)
+	}
+	// Con la IP limitada, ni un acceso correcto pasa hasta que expire la ventana.
+	if code, _ := e.tryLogin(t, "estudiante@dxstech.edu", "Student1234*"); code != http.StatusTooManyRequests {
+		t.Fatalf("IP limitada: esperado 429, obtuvo %d", code)
 	}
 }

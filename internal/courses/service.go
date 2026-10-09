@@ -777,18 +777,27 @@ func (s *Service) SaveUpload(fileHeader *multipart.FileHeader) (string, error) {
 
 // Course Discussions / Q&A Forum
 
+const (
+	maxDiscussionMessage = 5000
+	maxDiscussionTitle   = 150
+)
+
+// GetDiscussions devuelve los hilos del foro (más antiguos primero) con sus
+// respuestas anidadas. El filtro por lección aplica a los hilos; las respuestas
+// siempre acompañan a su hilo.
 func (s *Service) GetDiscussions(ctx context.Context, courseID, lessonID string) ([]CourseDiscussion, error) {
 	query := `
-		SELECT id, course_id, coalesce(lesson_id, ''), user_id, user_name, user_role, message, created_at
+		SELECT id, course_id, coalesce(lesson_id, ''), user_id, user_name, user_role,
+		       title, message, parent_id, created_at
 		FROM course_discussions
 		WHERE course_id = ?
 	`
 	args := []any{courseID}
 	if strings.TrimSpace(lessonID) != "" {
-		query += " AND (lesson_id = ? OR lesson_id = '')"
+		query += " AND (parent_id <> '' OR lesson_id = ? OR lesson_id = '')"
 		args = append(args, lessonID)
 	}
-	query += " ORDER BY created_at ASC LIMIT 100"
+	query += " ORDER BY created_at ASC, id ASC LIMIT 500"
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -796,29 +805,69 @@ func (s *Service) GetDiscussions(ctx context.Context, courseID, lessonID string)
 	}
 	defer rows.Close()
 
-	list := make([]CourseDiscussion, 0)
+	threads := make([]CourseDiscussion, 0)
+	index := map[string]int{}
+	var replies []CourseDiscussion
 	for rows.Next() {
 		var d CourseDiscussion
-		if err := rows.Scan(&d.ID, &d.CourseID, &d.LessonID, &d.UserID, &d.UserName, &d.UserRole, &d.Message, &d.CreatedAt); err == nil {
-			list = append(list, d)
+		if err := rows.Scan(&d.ID, &d.CourseID, &d.LessonID, &d.UserID, &d.UserName, &d.UserRole, &d.Title, &d.Message, &d.ParentID, &d.CreatedAt); err != nil {
+			continue
+		}
+		d.Replies = []CourseDiscussion{}
+		if d.ParentID == "" {
+			index[d.ID] = len(threads)
+			threads = append(threads, d)
+		} else {
+			replies = append(replies, d)
 		}
 	}
-	return list, nil
+	for _, r := range replies {
+		if i, ok := index[r.ParentID]; ok {
+			threads[i].Replies = append(threads[i].Replies, r)
+		}
+	}
+	return threads, nil
 }
 
-func (s *Service) CreateDiscussion(ctx context.Context, courseID, lessonID, userID, userName, userRole, message string) (*CourseDiscussion, error) {
+// CreateDiscussion publica un hilo nuevo o, si parentID no está vacío, una
+// respuesta a un hilo existente del mismo curso (las respuestas a respuestas se
+// anidan en el hilo raíz).
+func (s *Service) CreateDiscussion(ctx context.Context, courseID, lessonID, userID, userName, userRole, message, title, parentID string) (*CourseDiscussion, error) {
 	msg := strings.TrimSpace(message)
 	if msg == "" {
 		return nil, errors.New("el mensaje no puede estar vacío")
+	}
+	if len([]rune(msg)) > maxDiscussionMessage {
+		return nil, fmt.Errorf("el mensaje no puede superar los %d caracteres", maxDiscussionMessage)
+	}
+	title = strings.TrimSpace(title)
+	if len([]rune(title)) > maxDiscussionTitle {
+		return nil, fmt.Errorf("el título no puede superar los %d caracteres", maxDiscussionTitle)
+	}
+
+	parentID = strings.TrimSpace(parentID)
+	if parentID != "" {
+		var parentParent, parentLesson string
+		err := s.db.QueryRowContext(ctx,
+			`SELECT parent_id, coalesce(lesson_id, '') FROM course_discussions WHERE id = ? AND course_id = ?`,
+			parentID, courseID).Scan(&parentParent, &parentLesson)
+		if err != nil {
+			return nil, errors.New("la discusión a la que respondes no existe en este curso")
+		}
+		if parentParent != "" {
+			parentID = parentParent // se anida en el hilo raíz
+		}
+		lessonID = parentLesson
+		title = ""
 	}
 
 	id := fmt.Sprintf("dsc-%d", time.Now().UnixNano())
 	now := time.Now()
 
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO course_discussions (id, course_id, lesson_id, user_id, user_name, user_role, message, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, courseID, lessonID, userID, userName, userRole, msg, now)
+		INSERT INTO course_discussions (id, course_id, lesson_id, user_id, user_name, user_role, title, message, parent_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, courseID, lessonID, userID, userName, userRole, title, msg, parentID, now)
 	if err != nil {
 		return nil, fmt.Errorf("error publicando en el foro: %w", err)
 	}
@@ -830,7 +879,10 @@ func (s *Service) CreateDiscussion(ctx context.Context, courseID, lessonID, user
 		UserID:    userID,
 		UserName:  userName,
 		UserRole:  userRole,
+		Title:     title,
 		Message:   msg,
+		ParentID:  parentID,
+		Replies:   []CourseDiscussion{},
 		CreatedAt: now,
 	}, nil
 }

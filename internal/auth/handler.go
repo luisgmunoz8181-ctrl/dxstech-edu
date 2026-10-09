@@ -23,9 +23,12 @@ func NewHandler(svc *Service, isProd bool) *Handler {
 
 func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	limiter := NewRateLimiter(15, 1*time.Minute)
+	// Login: el límite por IP cuenta solo los fallos (la defensa principal por
+	// cuenta es el bloqueo temporal tras 5 intentos fallidos).
+	loginLimiter := NewRateLimiter(20, 1*time.Minute)
 
 	// Public routes
-	r.POST("/login", limiter.Middleware(), h.HandleLogin)
+	r.POST("/login", loginLimiter.FailureMiddleware(), h.HandleLogin)
 	r.POST("/logout", h.HandleLogout)
 	r.POST("/forgot-password", limiter.Middleware(), h.HandleForgotPassword)
 	r.POST("/reset-password", limiter.Middleware(), h.HandleResetPassword)

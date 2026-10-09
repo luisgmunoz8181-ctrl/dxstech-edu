@@ -129,18 +129,23 @@ type UpdateLessonRequest struct {
 }
 
 type CourseDiscussion struct {
-	ID        string    `json:"id"`
-	CourseID  string    `json:"courseId"`
-	LessonID  string    `json:"lessonId,omitempty"`
-	UserID    string    `json:"userId"`
-	UserName  string    `json:"userName"`
-	UserRole  string    `json:"userRole"`
-	Message   string    `json:"message"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string             `json:"id"`
+	CourseID  string             `json:"courseId"`
+	LessonID  string             `json:"lessonId,omitempty"`
+	UserID    string             `json:"userId"`
+	UserName  string             `json:"userName"`
+	UserRole  string             `json:"userRole"`
+	Title     string             `json:"title"`
+	Message   string             `json:"message"`
+	ParentID  string             `json:"parentId,omitempty"`
+	Replies   []CourseDiscussion `json:"replies"`
+	CreatedAt time.Time          `json:"createdAt"`
 }
 
 type CreateDiscussionRequest struct {
 	LessonID string `json:"lessonId"`
+	Title    string `json:"title"`
+	ParentID string `json:"parentId"`
 	Message  string `json:"message" binding:"required"`
 }
 

@@ -29,17 +29,23 @@ FROM alpine:3.21
 
 WORKDIR /app
 
-# Install SSL root certificates and timezone data
-RUN apk add --no-cache ca-certificates tzdata
+# Install SSL root certificates, timezone data and su-exec (cesión de privilegios)
+RUN apk add --no-cache ca-certificates tzdata su-exec
+
+# Usuario sin privilegios que ejecuta la aplicación
+RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app -h /app app
 
 # Create directory for persistent SQLite storage
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown app:app /app/data
 
 # Copy compiled binary from builder
 COPY --from=builder /src/dxstech-server /app/dxstech-server
 
 # Copy SPA frontend static assets (HTML, JavaScript ES Modules, Assets)
 COPY web/ /app/web/
+
+# Entrypoint: corrige permisos del volumen y arranca como usuario no-root
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Configure production environment
 ENV APP_ENV=production \
@@ -53,9 +59,9 @@ VOLUME ["/app/data"]
 # Expose internal HTTP service port
 EXPOSE 3000
 
-# Healthcheck endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+# Healthcheck endpoint (responde 503 si la base de datos no está disponible)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://127.0.0.1:${PORT:-3000}/api/health || exit 1
 
-# Execute server
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/app/dxstech-server"]

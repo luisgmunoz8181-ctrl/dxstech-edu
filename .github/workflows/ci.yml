@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go (formato, vet, tests con -race)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "Archivos sin formato (ejecuta gofmt -w .):"
+            echo "$unformatted"
+            exit 1
+          fi
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test -race -count=1 ./...
+
+  frontend:
+    name: Frontend (sintaxis, ESLint, CSS compilado)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sintaxis de los módulos JS
+        run: |
+          find web/js -name '*.js' | sort | while read -r f; do
+            node --check --input-type=module < "$f" || { echo "Error de sintaxis en $f"; exit 1; }
+          done
+      - name: ESLint (identificadores sin definir)
+        run: npx --yes eslint@10.1.0 -c eslint.config.js web/js
+      - name: El CSS de Tailwind está actualizado
+        run: |
+          npx --yes tailwindcss@3.4.17 -c tailwind.config.js -i web/css/tailwind.input.css -o "$RUNNER_TEMP/tailwind.css" --minify
+          if ! cmp -s "$RUNNER_TEMP/tailwind.css" web/css/tailwind.css; then
+            echo "web/css/tailwind.css está desactualizado. Ejecuta 'pnpm build:css' y sube el resultado."
+            exit 1
+          fi
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - name: Instalar dependencias y Chromium
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Ejecutar pruebas
+        working-directory: e2e
+        env:
+          CI: "true"
+        run: npx playwright test
+      - name: Subir informe y trazas si fallan
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+
+  docker:
+    name: Docker (build, usuario no-root y healthcheck)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construir la imagen
+        run: docker build -t dxstech-edu:ci .
+      - name: Humo - arranca como no-root con un volumen que pertenece a root
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/data"
+          sudo chown root:root "$RUNNER_TEMP/data"
+          docker run -d --name app -p 3000:3000 \
+            -e JWT_SECRET="$(openssl rand -hex 32)" \
+            -e BOOTSTRAP_ADMIN_PASSWORD='Clave-Inicial-2026x' \
+            -v "$RUNNER_TEMP/data:/app/data" dxstech-edu:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/health | grep -q '"database":"ok"'; then ok=1; break; fi
+            sleep 1
+          done
+          [ "${ok:-0}" = "1" ] || { docker logs app; exit 1; }
+          # docker top usa el ps del host: muestra el UID numérico del proceso del servidor.
+          uid="$(docker top app -eo uid,args | awk 'NR>1 && /dxstech-server/ {print $1; exit}')"
+          echo "El servidor corre con UID: $uid"
+          [ "$uid" = "10001" ] || { echo "El servidor no corre como el usuario sin privilegios (UID 10001)"; exit 1; }
+          owner="$(stat -c %u "$RUNNER_TEMP/data/dxstech.db")"
+          [ "$owner" = "10001" ] || { echo "La base de datos no pertenece al usuario 10001 (es $owner)"; exit 1; }
+          curl -fsS http://localhost:3000/ | grep -q "DxSTech"
+      - name: Registros del contenedor
+        if: always()
+        run: docker logs app || true

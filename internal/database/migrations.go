@@ -37,6 +37,18 @@ var migrations = []migration{
 		}
 		return nil
 	}},
+	{5, "forum_titles_and_replies", func(tx *sql.Tx) error {
+		for _, c := range []struct{ table, column, def string }{
+			{"course_discussions", "title", "TEXT NOT NULL DEFAULT ''"},
+			{"course_discussions", "parent_id", "TEXT NOT NULL DEFAULT ''"},
+		} {
+			if err := addColumnIfMissing(tx, c.table, c.column, c.def); err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(`CREATE INDEX IF NOT EXISTS idx_discussions_parent ON course_discussions(course_id, parent_id)`)
+		return err
+	}},
 }
 
 func migrate(db *sql.DB) error {

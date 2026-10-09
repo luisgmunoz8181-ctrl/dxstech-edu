@@ -1,6 +1,6 @@
 # DxSTech Edu — Plataforma Educativa Premium
 
-DxSTech Edu es una suite educativa integral de alto rendimiento construida con **Go 1.25+ (Gin)** y una **SPA en Vanilla JavaScript ES Modules**, impulsada por Tailwind CSS, Lucide Icons, SQLite (100% CGO-free con `modernc.org/sqlite`) y la API de Google Gemini bajo el modelo de privacidad BYOK (*Bring Your Own Key*).
+DxSTech Edu es una suite educativa integral de alto rendimiento construida con **Go 1.24+ (Gin)** y una **SPA en Vanilla JavaScript ES Modules**, impulsada por Tailwind CSS, Lucide Icons, SQLite (100% CGO-free con `modernc.org/sqlite`) y la API de Google Gemini bajo el modelo de privacidad BYOK (*Bring Your Own Key*).
 
 ---
 
@@ -103,8 +103,12 @@ docker run -d \
   -p 3000:3000 \
   -v dxstech_data:/app/data \
   -e APP_ENV=production \
+  -e JWT_SECRET="$(openssl rand -hex 32)" \
   dxstech-edu
 ```
+
+> **Usuario sin privilegios:** la imagen ejecuta el servidor como el usuario `app` (UID 10001), no como root. Al iniciar, el entrypoint corrige la propiedad del volumen `/app/data` si aún pertenece a root (volúmenes creados con versiones anteriores), por lo que no necesitas migrar nada a mano.
+> Guarda el `JWT_SECRET` (por ejemplo en las variables de Coolify): si cambia, todas las sesiones activas se invalidan.
 
 ---
 
@@ -160,6 +164,28 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 
 ---
 
+## 🔐 Seguridad operativa
+
+- **Contraseñas:** mínimo 10 caracteres (y máximo 72 bytes por el límite de bcrypt), con mayúscula, minúscula y número; se rechazan las contraseñas comunes y las que contienen el nombre o el correo del usuario. Los usuarios creados por un administrador deben cambiar su contraseña en el primer ingreso.
+- **Bloqueo de cuentas:** tras 5 contraseñas incorrectas la cuenta se bloquea 15 minutos (también en el cambio de contraseña). Un administrador puede desbloquearla con `POST /api/auth/users/:id/unlock`, o el usuario restableciendo su contraseña. Además, cada IP tiene un límite de 20 fallos por minuto (solo cuentan los fallos, así que un aula o una oficina con una sola IP pública no se bloquea sola).
+- **Logs estructurados:** JSON en producción (texto legible con `--dev`), una línea por petición con `request_id`, usuario, rol, estado y latencia; nunca se registran query strings ni claves. Cada respuesta incluye la cabecera `X-Request-ID`, y los errores internos devuelven ese identificador para que soporte pueda rastrear el problema.
+- **Auditoría:** además del acceso y la gestión de usuarios, se registran cursos, módulos, lecciones, subidas de archivos, certificados, evaluaciones, matrículas administrativas y WhatsApp. Los administradores pueden consultarla en `GET /api/admin/audit` (filtros `action`, `userId`, `search`, `limit`, `offset`).
+
+---
+
+## 🧪 Pruebas y CI
+
+```bash
+go test -race ./...                 # backend (incluye la matriz de acceso de todas las rutas de la API)
+cd e2e && npm ci && npx playwright install chromium && npx playwright test   # frontend end-to-end
+```
+
+- **Matriz de acceso:** `cmd/server/routes_test.go` obliga a clasificar cada ruta de `/api` como `public`, `authed`, `enrolled` o `admin` y comprueba cómo responde a un anónimo, a un estudiante y a un administrador. Si agregas una ruta nueva sin declararla, el test falla.
+- **E2E:** `e2e/` levanta el servidor en modo `--dev` con una base temporal y prueba login y permisos de la interfaz, XSS, aula virtual, foro, administración de cursos, contraseña temporal y bloqueo.
+- **CI** (`.github/workflows/ci.yml`): `gofmt`, `go vet`, `go test -race`, sintaxis y ESLint del frontend, verificación de que `web/css/tailwind.css` esté actualizado, pruebas E2E y construcción de la imagen Docker (comprobando que corre sin root con un volumen que pertenece a root).
+
+---
+
 ## 🎨 Estilos y librerías del frontend
 
 El frontend **no depende de CDNs en tiempo de ejecución**: Tailwind se compila a `web/css/tailwind.css`, y Lucide y SheetJS se sirven desde `web/vendor/` con versión fija.
@@ -193,10 +219,10 @@ pnpm build:css
 │   └── js/
 │       ├── main.js             # Enrutador de vistas, verificación QR pública y estado
 │       ├── components/         # Toast, Modal, Loading, Empty State
-│       └── views/              # Certificados, Quizzes, WhatsApp, Ajustes
+│       └── views/              # Vistas; las grandes se dividen en subcarpetas (courses/, certificates/, quizzes/)
 ├── data/                       # Almacenamiento SQLite local (dxstech.db)
 ├── package.json                # Scripts pnpm (dev, build, start)
-├── go.mod                      # Módulo Go 1.25+
+├── go.mod                      # Módulo Go 1.24+
 └── README.md                   # Documentación completa del proyecto
 ```
 

@@ -133,7 +133,7 @@ func TestCourseLifecycle(t *testing.T) {
 	}
 
 	// 8. Test Discussions / Forum
-	disc, err := svc.CreateDiscussion(ctx, newCourse.ID, lsn.ID, "usr-student-01", "Carlos Estudiante", "ESTUDIANTE", "¿Cuáles son las herramientas recomendadas para escaneo de puertos?")
+	disc, err := svc.CreateDiscussion(ctx, newCourse.ID, lsn.ID, "usr-student-01", "Carlos Estudiante", "ESTUDIANTE", "¿Cuáles son las herramientas recomendadas para escaneo de puertos?", "Herramientas", "")
 	if err != nil {
 		t.Fatalf("Error creating discussion: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"dxstech-edu/internal/config"
@@ -39,7 +40,17 @@ func (e *LockedError) Error() string {
 
 // dummyHash permite igualar el tiempo de respuesta cuando el correo no existe,
 // evitando enumerar usuarios por diferencia de latencia.
-var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dxstech-timing-equalizer"), bcrypt.DefaultCost)
+var (
+	dummyHash     []byte
+	dummyHashOnce sync.Once
+)
+
+func timingEqualizer(password string) {
+	dummyHashOnce.Do(func() {
+		dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dxstech-timing-equalizer"), database.BcryptCost)
+	})
+	_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+}
 
 func NewService(db *database.DB, cfg *config.Config) *Service {
 	return &Service{
@@ -77,7 +88,7 @@ func (s *Service) Login(ctx context.Context, req LoginRequest, clientIP, userAge
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
+			timingEqualizer(req.Password)
 			s.LogAudit(nil, "LOGIN_FAILED", "auth", clientIP, userAgent, fmt.Sprintf("Usuario no encontrado: %s", email))
 			return nil, errors.New("correo electrónico o contraseña incorrectos")
 		}
@@ -245,7 +256,7 @@ func (s *Service) ChangePassword(ctx context.Context, userID, oldPassword, newPa
 		return errors.New("la contraseña actual no es correcta")
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), database.BcryptCost)
 	if err != nil {
 		return errors.New("error procesando nueva contraseña")
 	}
@@ -335,7 +346,7 @@ func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword, clie
 		return err
 	}
 
-	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), database.BcryptCost)
 	if err != nil {
 		return errors.New("error procesando contraseña")
 	}
@@ -438,7 +449,7 @@ func (s *Service) CreateUser(ctx context.Context, adminID string, req CreateUser
 		return nil, errors.New("ya existe un usuario registrado con este correo electrónico")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), database.BcryptCost)
 	if err != nil {
 		return nil, errors.New("error encriptando contraseña")
 	}
@@ -448,7 +459,7 @@ func (s *Service) CreateUser(ctx context.Context, adminID string, req CreateUser
 
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO users (id, first_name, last_name, email, password_hash, role_id, status, email_verified, must_change_password, identification, company, job_title, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, 'active', 1, 0, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, 'active', 1, 1, ?, ?, ?, ?, ?)
 	`, userID, strings.TrimSpace(req.FirstName), strings.TrimSpace(req.LastName), email, string(hash), req.RoleID, req.Identification, req.Company, req.JobTitle, now, now)
 
 	if err != nil {

@@ -227,32 +227,67 @@ func NewRateLimiter(limit int, window time.Duration) *MemoryRateLimiter {
 	return limiter
 }
 
+// recent devuelve los intentos de la IP dentro de la ventana.
+func (l *MemoryRateLimiter) recent(ip string, now time.Time) []time.Time {
+	var valid []time.Time
+	for _, t := range l.attempts[ip] {
+		if now.Sub(t) < l.window {
+			valid = append(valid, t)
+		}
+	}
+	return valid
+}
+
+func tooManyAttempts(c *gin.Context) {
+	c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+		"error": "Demasiados intentos de acceso fallidos. Por seguridad, intente de nuevo en unos minutos.",
+	})
+}
+
+// Middleware cuenta TODAS las peticiones de la IP (útil para endpoints que
+// siempre responden 200 por diseño, como forgot-password).
 func (l *MemoryRateLimiter) Middleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		now := time.Now()
 
 		l.mu.Lock()
-		times := l.attempts[ip]
-		var valid []time.Time
-		for _, t := range times {
-			if now.Sub(t) < l.window {
-				valid = append(valid, t)
-			}
-		}
-
+		valid := l.recent(ip, now)
 		if len(valid) >= l.limit {
 			l.mu.Unlock()
-			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
-				"error": "Demasiados intentos de acceso fallidos. Por seguridad, intente de nuevo en unos minutos.",
-			})
+			tooManyAttempts(c)
 			return
 		}
-
-		valid = append(valid, now)
-		l.attempts[ip] = valid
+		l.attempts[ip] = append(valid, now)
 		l.mu.Unlock()
 
 		c.Next()
+	}
+}
+
+// FailureMiddleware cuenta solo las peticiones que terminan en 401 (credenciales
+// incorrectas). Así muchos accesos legítimos desde una misma IP (un aula, una
+// oficina o una red con NAT) no se bloquean entre sí, mientras que quien
+// adivina contraseñas sí queda limitado.
+func (l *MemoryRateLimiter) FailureMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+
+		l.mu.Lock()
+		blocked := len(l.recent(ip, time.Now())) >= l.limit
+		l.mu.Unlock()
+		if blocked {
+			tooManyAttempts(c)
+			return
+		}
+
+		c.Next()
+
+		if c.Writer.Status() == http.StatusUnauthorized {
+			l.mu.Lock()
+			now := time.Now()
+			l.attempts[ip] = append(l.recent(ip, now), now)
+			l.mu.Unlock()
+		}
 	}
 }

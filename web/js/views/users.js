@@ -1,6 +1,5 @@
 import { Toast } from '../components/toast.js';
 import { Modal } from '../components/modal.js';
-import { Loading } from '../components/loading.js';
 import { esc } from '../utils/escape.js';
 
 export const UsersView = {

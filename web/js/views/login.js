@@ -1,5 +1,4 @@
 import { Toast } from '../components/toast.js';
-import { Loading } from '../components/loading.js';
 
 export const LoginView = {
   mode: 'login', // 'login' | 'forgot' | 'reset'

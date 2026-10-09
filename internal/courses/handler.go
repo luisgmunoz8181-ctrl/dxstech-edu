@@ -329,7 +329,7 @@ func (h *Handler) HandleCreateDiscussion(c *gin.Context) {
 		return
 	}
 
-	d, err := h.svc.CreateDiscussion(c.Request.Context(), courseID, req.LessonID, userID, userName, userRole, req.Message)
+	d, err := h.svc.CreateDiscussion(c.Request.Context(), courseID, req.LessonID, userID, userName, userRole, req.Message, req.Title, req.ParentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

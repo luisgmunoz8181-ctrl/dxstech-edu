@@ -5,6 +5,24 @@ class ModalManager {
     this.container = document.getElementById('modal-container');
   }
 
+  // Cierra el modal actual (con animación). Un show() posterior cancela el vaciado
+  // pendiente, de modo que `Modal.close(); this.abrirOtroModal();` funciona.
+  close() {
+    const container = this.getContainer();
+    if (!container) return;
+    const card = container.querySelector('.modal-card');
+    if (card) {
+      card.classList.remove('scale-100', 'opacity-100');
+      card.classList.add('scale-95', 'opacity-0');
+    }
+    clearTimeout(this.closeTimer);
+    this.closeTimer = setTimeout(() => {
+      container.classList.add('hidden');
+      container.innerHTML = '';
+      container.onclick = null;
+    }, 150);
+  }
+
   getContainer() {
     if (!this.container) {
       this.container = document.getElementById('modal-container');
@@ -26,6 +44,7 @@ class ModalManager {
   }) {
     const container = this.getContainer();
     if (!container) return;
+    clearTimeout(this.closeTimer);
 
     container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-2xl border border-slate-200/80 ${maxWidth} w-full p-6 transform transition-all duration-200 scale-95 opacity-0 modal-card max-h-[90vh] flex flex-col">
@@ -64,14 +83,7 @@ class ModalManager {
     const confirmBtn = container.querySelector('#modal-confirm-btn');
     const cancelBtn = container.querySelector('#modal-cancel-btn');
 
-    const close = () => {
-      card.classList.remove('scale-100', 'opacity-100');
-      card.classList.add('scale-95', 'opacity-0');
-      setTimeout(() => {
-        container.classList.add('hidden');
-        container.innerHTML = '';
-      }, 150);
-    };
+    const close = () => this.close();
 
     confirmBtn.addEventListener('click', () => {
       close();
@@ -97,6 +109,7 @@ class ModalManager {
   promptGeminiKey({ onSaved = () => {}, onCancel = () => {} } = {}) {
     const container = this.getContainer();
     if (!container) return;
+    clearTimeout(this.closeTimer);
 
     container.innerHTML = `
       <div class="bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-lg w-full p-6 transform transition-all duration-200 scale-95 opacity-0 modal-card">
