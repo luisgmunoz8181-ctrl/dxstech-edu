@@ -99,3 +99,55 @@ func TestAdminActionsAreAudited(t *testing.T) {
 		t.Errorf("estudiante leyendo auditoría: esperado 403, obtuvo %d", code)
 	}
 }
+
+func TestBackupsAPIIsSuperadminOnlyAndAudited(t *testing.T) {
+	e := newRouteEnv(t)
+
+	// Un ADMINISTRADOR no puede ver ni crear copias (contienen datos de todos los usuarios).
+	if code, _ := e.do("POST", "/api/admin/backups", e.admin, "", nil); code != http.StatusForbidden {
+		t.Fatalf("administrador creando copia: esperado 403, obtuvo %d", code)
+	}
+
+	code, body := e.do("POST", "/api/admin/backups", e.super, "", nil)
+	if code != http.StatusCreated {
+		t.Fatalf("crear copia: %d %s", code, body)
+	}
+	var info struct {
+		Name      string `json:"name"`
+		SizeBytes int64  `json:"sizeBytes"`
+	}
+	_ = json.Unmarshal(body, &info)
+	if info.Name == "" || info.SizeBytes == 0 {
+		t.Fatalf("respuesta inesperada: %s", body)
+	}
+
+	code, body = e.do("GET", "/api/admin/backups", e.super, "", nil)
+	if code != http.StatusOK || !strings.Contains(string(body), info.Name) {
+		t.Fatalf("listar copias: %d %s", code, body)
+	}
+
+	req, _ := http.NewRequest("GET", "/api/admin/backups/"+info.Name, nil)
+	req.Header.Set("Authorization", "Bearer "+e.super)
+	w := httptest.NewRecorder()
+	e.r.ServeHTTP(w, req)
+	if w.Code != 200 || w.Body.Len() == 0 || !strings.Contains(w.Header().Get("Content-Disposition"), info.Name) {
+		t.Fatalf("descarga: %d (%d bytes) %v", w.Code, w.Body.Len(), w.Header())
+	}
+	if w.Body.Bytes()[0] != 0x1f || w.Body.Bytes()[1] != 0x8b {
+		t.Error("la descarga debe ser el .tar.gz sin recomprimir ni alterar")
+	}
+
+	for _, bad := range []string{"..%2F..%2Fetc%2Fpasswd", "dxstech.db", "otro.tar.gz"} {
+		if code, _ := e.do("GET", "/api/admin/backups/"+bad, e.super, "", nil); code != http.StatusNotFound {
+			t.Errorf("descarga de %q: esperado 404, obtuvo %d", bad, code)
+		}
+	}
+
+	// Quedan registradas la creación y la descarga.
+	for _, action := range []string{"BACKUP_CREATE", "BACKUP_DOWNLOAD"} {
+		code, body := e.do("GET", "/api/admin/audit?action="+action, e.super, "", nil)
+		if code != 200 || !strings.Contains(string(body), info.Name) {
+			t.Errorf("%s no quedó auditada: %d %s", action, code, body)
+		}
+	}
+}

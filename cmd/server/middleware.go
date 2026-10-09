@@ -133,6 +133,10 @@ func requestDeadlinesMiddleware() gin.HandlerFunc {
 		if read == 0 && strings.HasPrefix(c.Request.URL.Path, "/api/admin/reports/") {
 			read, write = 30*time.Second, 2*time.Minute
 		}
+		if read == 0 && strings.HasPrefix(c.Request.URL.Path, "/api/admin/backups") {
+			// Crear o descargar una copia puede tardar con muchos archivos subidos.
+			read, write = 30*time.Second, 10*time.Minute
+		}
 		if read > 0 {
 			rc := http.NewResponseController(c.Writer)
 			now := time.Now()

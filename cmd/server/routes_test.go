@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"dxstech-edu/internal/backup"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/database"
 
@@ -21,10 +22,11 @@ import (
 type access int
 
 const (
-	public   access = iota // sin sesión
-	authed                 // cualquier usuario con sesión
-	enrolled               // con sesión Y matrícula en el curso (o rol administrador)
-	admin                  // SUPERADMIN o ADMINISTRADOR
+	public     access = iota // sin sesión
+	authed                   // cualquier usuario con sesión
+	enrolled                 // con sesión Y matrícula en el curso (o rol administrador)
+	admin                    // SUPERADMIN o ADMINISTRADOR
+	superadmin               // solo SUPERADMIN (datos de toda la plataforma)
 )
 
 // routeAccess clasifica TODAS las rutas de la API. Si se añade una ruta nueva
@@ -109,12 +111,16 @@ var routeAccess = map[string]access{
 	"GET /api/admin/reports/enrollments.csv":      admin,
 	"GET /api/admin/reports/certificates.csv":     admin,
 	"GET /api/admin/audit":                        admin,
+	"GET /api/admin/backups":                      superadmin,
+	"POST /api/admin/backups":                     superadmin,
+	"GET /api/admin/backups/:name":                superadmin,
 }
 
 type routeEnv struct {
 	r       *gin.Engine
 	student string
 	admin   string
+	super   string
 }
 
 func newRouteEnv(t *testing.T) *routeEnv {
@@ -131,13 +137,14 @@ func newRouteEnv(t *testing.T) *routeEnv {
 
 	// Producción: el gateway de WhatsApp exige rol de administrador.
 	cfg := &config.Config{AppEnv: "production", JWTSecret: strings.Repeat("s", 40), DataDir: dir, TrustedProxies: nil}
-	r, err := newRouter(cfg, db)
+	r, err := newRouter(cfg, db, backup.New(db, dir, dir+"/backups", 3))
 	if err != nil {
 		t.Fatal(err)
 	}
 	e := &routeEnv{r: r}
 	e.student = e.login(t, "estudiante@dxstech.edu", "Student1234*")
 	e.admin = e.login(t, "admin@dxstech.edu", "Admin1234*")
+	e.super = e.login(t, "superadmin@dxstech.edu", "Admin1234*")
 	return e
 }
 
@@ -223,6 +230,7 @@ func TestRouteAccessMatrix(t *testing.T) {
 		anon := e.call(method, path, "")
 		student := e.call(method, path, e.student)
 		adm := e.call(method, path, e.admin)
+		sup := e.call(method, path, e.super)
 
 		switch want {
 		case public:
@@ -244,6 +252,16 @@ func TestRouteAccessMatrix(t *testing.T) {
 			if student != http.StatusForbidden {
 				t.Errorf("%s (enrolled): estudiante sin matrícula esperado 403, obtuvo %d", key, student)
 			}
+		case superadmin:
+			if anon != http.StatusUnauthorized {
+				t.Errorf("%s (superadmin): anónimo esperado 401, obtuvo %d", key, anon)
+			}
+			if student != http.StatusForbidden || adm != http.StatusForbidden {
+				t.Errorf("%s (superadmin): estudiante y administrador esperaban 403, obtuvieron %d y %d", key, student, adm)
+			}
+			if denied(sup) {
+				t.Errorf("%s (superadmin): el superadministrador recibió %d", key, sup)
+			}
 		case admin:
 			if anon != http.StatusUnauthorized {
 				t.Errorf("%s (admin): anónimo esperado 401, obtuvo %d", key, anon)
@@ -252,7 +270,7 @@ func TestRouteAccessMatrix(t *testing.T) {
 				t.Errorf("%s (admin): estudiante esperado 403, obtuvo %d", key, student)
 			}
 		}
-		if denied(adm) && key != "GET /api/auth/me" {
+		if want != superadmin && denied(adm) && key != "GET /api/auth/me" {
 			t.Errorf("%s: un administrador recibió %d", key, adm)
 		}
 	}

@@ -35,6 +35,11 @@ const (
 	WhatsAppConfig   = "WHATSAPP_CONFIG_UPDATE"
 	WhatsAppSync     = "WHATSAPP_SYNC_COURSES"
 	WhatsAppLogsWipe = "WHATSAPP_LOGS_CLEAR"
+	BackupCreate     = "BACKUP_CREATE"
+	BackupDownload   = "BACKUP_DOWNLOAD"
+	ForumDelete      = "FORUM_POST_DELETE"
+	ForumReport      = "FORUM_POST_REPORT"
+	ForumModerate    = "FORUM_REPORT_RESOLVE"
 )
 
 // Entry describe un evento de auditoría.

@@ -11,6 +11,7 @@ import (
 	"dxstech-edu/internal/ai"
 	"dxstech-edu/internal/analytics"
 	"dxstech-edu/internal/auth"
+	"dxstech-edu/internal/backup"
 	"dxstech-edu/internal/certificates"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/courses"
@@ -34,7 +35,7 @@ func (q *quizEnrollmentCompleter) CompleteLesson(ctx context.Context, userID, co
 
 // newRouter construye el servidor HTTP completo (middlewares, API y SPA). Está
 // separado de main para poder probarlo de extremo a extremo.
-func newRouter(cfg *config.Config, db *database.DB) (*gin.Engine, error) {
+func newRouter(cfg *config.Config, db *database.DB, backupSvc *backup.Service) (*gin.Engine, error) {
 	geminiClient := ai.NewGeminiClient()
 
 	authService := auth.NewService(db, cfg)
@@ -63,7 +64,7 @@ func newRouter(cfg *config.Config, db *database.DB) (*gin.Engine, error) {
 	// Compresión gzip de JSON/JS/CSS/HTML/CSV. Se excluyen los binarios ya
 	// comprimidos o servidos por rangos (video, PDF, PPTX, ZIP, imágenes).
 	r.Use(gzip.Gzip(gzip.DefaultCompression,
-		gzip.WithExcludedPaths([]string{"/uploads/", "/api/certificates/"}),
+		gzip.WithExcludedPaths([]string{"/uploads/", "/api/certificates/", "/api/admin/backups/"}),
 		gzip.WithExcludedExtensions([]string{".png", ".jpg", ".jpeg", ".webp", ".gif", ".pdf", ".pptx", ".ppt", ".mp4", ".webm", ".zip", ".woff", ".woff2"}),
 	))
 	r.Use(corsMiddleware(cfg.AllowedOrigins()))
@@ -91,6 +92,7 @@ func newRouter(cfg *config.Config, db *database.DB) (*gin.Engine, error) {
 		quizService.RegisterRoutes(api.Group("/quizzes"))
 		waService.RegisterRoutes(api.Group("/whatsapp"))
 		analyticsHandler.RegisterRoutes(api.Group("/admin"))
+		backup.NewHandler(backupSvc, db).RegisterRoutes(api.Group("/admin/backups"))
 	}
 
 	// Serve Frontend Static SPA & Uploads

@@ -5,7 +5,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // MinJWTSecretLength es la longitud mínima exigida al secreto JWT en producción.
@@ -28,6 +31,12 @@ type Config struct {
 	// X-Forwarded-* se aceptan. Por defecto, los rangos privados/loopback
 	// (Docker, Coolify, Render). Con "none" no se confía en ninguno.
 	TrustedProxies []string
+
+	// Copias de seguridad automáticas (SQLite + archivos subidos).
+	BackupEnabled   bool
+	BackupDir       string
+	BackupInterval  time.Duration
+	BackupRetention int
 }
 
 var defaultTrustedProxies = []string{"127.0.0.1/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7"}
@@ -82,15 +91,33 @@ func Load() *Config {
 		}
 	}
 
+	backupDir := strings.TrimSpace(os.Getenv("BACKUP_DIR"))
+	if backupDir == "" {
+		backupDir = filepath.Join(dataDir, "backups")
+	}
+	backupEnabled := !strings.EqualFold(strings.TrimSpace(os.Getenv("BACKUP_ENABLED")), "false")
+	backupHours := atoiDefault(os.Getenv("BACKUP_INTERVAL_HOURS"), 24)
+	if backupHours < 1 {
+		backupHours = 24
+	}
+	backupRetention := atoiDefault(os.Getenv("BACKUP_RETENTION"), 7)
+	if backupRetention < 1 {
+		backupRetention = 7
+	}
+
 	return &Config{
-		TrustedProxies: trustedProxies,
-		AppEnv:         env,
-		Port:           port,
-		Host:           host,
-		DataDir:        dataDir,
-		JWTSecret:      jwtSecret,
-		AppURL:         strings.TrimRight(appURL, "/"),
-		CORSOrigins:    corsOrigins,
+		BackupEnabled:   backupEnabled,
+		BackupDir:       backupDir,
+		BackupInterval:  time.Duration(backupHours) * time.Hour,
+		BackupRetention: backupRetention,
+		TrustedProxies:  trustedProxies,
+		AppEnv:          env,
+		Port:            port,
+		Host:            host,
+		DataDir:         dataDir,
+		JWTSecret:       jwtSecret,
+		AppURL:          strings.TrimRight(appURL, "/"),
+		CORSOrigins:     corsOrigins,
 	}
 }
 
@@ -126,6 +153,13 @@ func (c *Config) AllowedOrigins() []string {
 		origins = append(origins, c.AppURL)
 	}
 	return append(origins, c.CORSOrigins...)
+}
+
+func atoiDefault(s string, def int) int {
+	if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
+		return n
+	}
+	return def
 }
 
 func (c *Config) IsDevelopment() bool {

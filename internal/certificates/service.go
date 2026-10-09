@@ -309,8 +309,8 @@ func (s *Service) VerifyCertificate(c *gin.Context) {
 			InstructorName: cert.InstructorName,
 			IssueDate:      cert.IssueDate,
 		},
-		"issuer":      "DxSTech Edu — Academy of Technology & AI",
-		"status":      "Certificado Oficial Verificado",
+		"issuer": "DxSTech Edu — Academy of Technology & AI",
+		"status": "Certificado Oficial Verificado",
 	})
 }
 

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"dxstech-edu/internal/backup"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/database"
 
@@ -19,6 +20,8 @@ import (
 
 func main() {
 	devFlag := flag.Bool("dev", false, "ejecuta en modo desarrollo (equivale a APP_ENV=development)")
+	restoreFlag := flag.String("restore", "", "restaura una copia de seguridad (.tar.gz) en DATA_DIR y termina; el servidor debe estar detenido")
+	yesFlag := flag.Bool("yes", false, "confirma la restauración (-restore)")
 	flag.Parse()
 
 	cfg := config.Load()
@@ -26,6 +29,11 @@ func main() {
 		cfg.AppEnv = "development"
 	}
 	setupLogging(cfg)
+
+	if *restoreFlag != "" {
+		runRestore(cfg, *restoreFlag, *yesFlag)
+		return
+	}
 
 	if err := cfg.EnsureJWTSecret(); err != nil {
 		log.Fatalf("❌ Configuración de seguridad inválida: %v", err)
@@ -43,7 +51,15 @@ func main() {
 	}
 	defer db.Close()
 
-	r, err := newRouter(cfg, db)
+	backupSvc := backup.New(db, cfg.DataDir, cfg.BackupDir, cfg.BackupRetention)
+	ctx, stopBackups := context.WithCancel(context.Background())
+	defer stopBackups()
+	if cfg.BackupEnabled {
+		backupSvc.StartScheduler(ctx, cfg.BackupInterval)
+		log.Printf("💾 Copias de seguridad automáticas cada %s (se conservan %d) en %s", cfg.BackupInterval, cfg.BackupRetention, cfg.BackupDir)
+	}
+
+	r, err := newRouter(cfg, db, backupSvc)
 	if err != nil {
 		log.Fatalf("❌ %v", err)
 	}
@@ -80,12 +96,28 @@ func main() {
 
 	log.Println("🛑 Apagando el servidor con gracia...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	stopBackups()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("❌ Error forzado en apagado: %v", err)
 	}
 
 	log.Println("✅ Servidor detenido correctamente.")
+}
+
+// runRestore restaura una copia de seguridad en DATA_DIR (modo CLI, servidor detenido).
+func runRestore(cfg *config.Config, archive string, confirmed bool) {
+	if !confirmed {
+		fmt.Printf("Se restaurará %s en %s.\n", archive, cfg.DataDir)
+		fmt.Println("El servidor debe estar DETENIDO. La base de datos y los archivos actuales no se borran:")
+		fmt.Println("se mueven a una carpeta pre-restore-<fecha> dentro de DATA_DIR.")
+		fmt.Println("Vuelve a ejecutar el comando agregando -yes para confirmar.")
+		os.Exit(2)
+	}
+	if err := backup.Restore(archive, cfg.DataDir); err != nil {
+		log.Fatalf("❌ No se pudo restaurar la copia: %v", err)
+	}
+	fmt.Println("✅ Copia restaurada. Ya puedes iniciar el servidor.")
 }
