@@ -2,9 +2,11 @@ package courses
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"dxstech-edu/internal/audit"
 	"dxstech-edu/internal/auth"
 )
 
@@ -20,8 +22,10 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	// Public / All Authenticated users
 	r.GET("", h.HandleListCourses)
 	r.GET("/:id", h.HandleGetCourse)
-	r.GET("/:id/discussions", h.HandleGetDiscussions)
+	r.GET("/:id/discussions", auth.RequireAuth(), h.HandleGetDiscussions)
 	r.POST("/:id/discussions", auth.RequireAuth(), h.HandleCreateDiscussion)
+	r.DELETE("/:id/discussions/:discussionId", auth.RequireAuth(), h.HandleDeleteDiscussion)
+	r.POST("/:id/discussions/:discussionId/report", auth.RequireAuth(), h.HandleReportDiscussion)
 	r.GET("/:id/reviews", h.HandleGetReviews)
 	r.POST("/:id/reviews", auth.RequireAuth(), h.HandleCreateReview)
 	r.GET("/:id/tutor-context", auth.RequireAuth(), h.HandleGetTutorContext)
@@ -49,6 +53,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 
 		// File Upload
 		admin.POST("/upload", h.HandleUpload)
+		admin.POST("/uploads/cleanup", h.HandleCleanupUploads)
 	}
 }
 
@@ -94,6 +99,7 @@ func (h *Handler) HandleCreateCourse(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseCreate, "courses", "Curso creado: %s (%s)", course.Code, course.ID)
 	c.JSON(http.StatusCreated, course)
 }
 
@@ -111,6 +117,7 @@ func (h *Handler) HandleUpdateCourse(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseUpdate, "courses", "Curso actualizado: %s (%s)", course.Code, course.ID)
 	c.JSON(http.StatusOK, course)
 }
 
@@ -124,6 +131,7 @@ func (h *Handler) HandleDuplicateCourse(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseDuplicate, "courses", "Curso %s duplicado como %s", id, course.ID)
 	c.JSON(http.StatusCreated, course)
 }
 
@@ -141,16 +149,20 @@ func (h *Handler) HandleChangeStatus(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseStatus, "courses", "Curso %s (%s) pasó a estado %s", course.Code, course.ID, req.Status)
 	c.JSON(http.StatusOK, course)
 }
 
 func (h *Handler) HandleDeleteCourse(c *gin.Context) {
 	id := c.Param("id")
+	var code, title string
+	_ = h.svc.db.QueryRowContext(c.Request.Context(), `SELECT code, title FROM courses WHERE id = ?`, id).Scan(&code, &title)
 	if err := h.svc.DeleteCourse(c.Request.Context(), id); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.CourseDelete, "courses", "Curso eliminado: %s \"%s\" (%s)", code, title, id)
 	c.JSON(http.StatusOK, gin.H{"message": "Curso eliminado correctamente"})
 }
 
@@ -170,6 +182,7 @@ func (h *Handler) HandleCreateModule(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.ModuleCreate, "course_modules", "Módulo %s creado en el curso %s", mod.ID, courseID)
 	c.JSON(http.StatusCreated, mod)
 }
 
@@ -187,6 +200,7 @@ func (h *Handler) HandleUpdateModule(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.ModuleUpdate, "course_modules", "Módulo actualizado: %s", moduleID)
 	c.JSON(http.StatusOK, mod)
 }
 
@@ -197,6 +211,7 @@ func (h *Handler) HandleDeleteModule(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.ModuleDelete, "course_modules", "Módulo eliminado: %s", moduleID)
 	c.JSON(http.StatusOK, gin.H{"message": "Módulo eliminado correctamente"})
 }
 
@@ -216,6 +231,7 @@ func (h *Handler) HandleCreateLesson(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.LessonCreate, "lessons", "Lección %s creada en el módulo %s", lesson.ID, moduleID)
 	c.JSON(http.StatusCreated, lesson)
 }
 
@@ -233,6 +249,7 @@ func (h *Handler) HandleUpdateLesson(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.LessonUpdate, "lessons", "Lección actualizada: %s", lessonID)
 	c.JSON(http.StatusOK, lesson)
 }
 
@@ -243,15 +260,19 @@ func (h *Handler) HandleDeleteLesson(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.LessonDelete, "lessons", "Lección eliminada: %s", lessonID)
 	c.JSON(http.StatusOK, gin.H{"message": "Lección eliminada correctamente"})
 }
 
 // Upload Handler
 
 func (h *Handler) HandleUpload(c *gin.Context) {
+	// Corta la lectura del cuerpo más allá del límite (+1 MB de margen multipart).
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxUploadBytes+1<<20)
+
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Debe adjuntar un archivo en el campo 'file'"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Debe adjuntar un archivo en el campo 'file' (máx. 25 MB)"})
 		return
 	}
 
@@ -261,6 +282,7 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 		return
 	}
 
+	audit.Record(h.svc.db, c, audit.FileUpload, "uploads", "Archivo subido: %s (%d bytes) como %s", file.Filename, file.Size, url)
 	c.JSON(http.StatusOK, gin.H{
 		"url":      url,
 		"filename": file.Filename,
@@ -270,8 +292,20 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 
 // Discussions Handlers
 
+// requireCourseAccess responde 403 si el usuario no es admin ni está matriculado.
+func (h *Handler) requireCourseAccess(c *gin.Context, courseID string) bool {
+	if h.svc.db.UserCanAccessCourse(c.Request.Context(), c.GetString("userID"), c.GetString("userRole"), courseID) {
+		return true
+	}
+	c.JSON(http.StatusForbidden, gin.H{"error": "Debes estar matriculado en este curso para acceder a esta función"})
+	return false
+}
+
 func (h *Handler) HandleGetDiscussions(c *gin.Context) {
 	courseID := c.Param("id")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
 	lessonID := c.Query("lessonId")
 
 	list, err := h.svc.GetDiscussions(c.Request.Context(), courseID, lessonID)
@@ -284,8 +318,11 @@ func (h *Handler) HandleGetDiscussions(c *gin.Context) {
 
 func (h *Handler) HandleCreateDiscussion(c *gin.Context) {
 	courseID := c.Param("id")
-	userID := c.GetString("userId")
-	userName := c.GetString("userEmail")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
+	userID := c.GetString("userID")
+	userName := c.GetString("userName")
 	userRole := c.GetString("userRole")
 
 	var req CreateDiscussionRequest
@@ -294,7 +331,7 @@ func (h *Handler) HandleCreateDiscussion(c *gin.Context) {
 		return
 	}
 
-	d, err := h.svc.CreateDiscussion(c.Request.Context(), courseID, req.LessonID, userID, userName, userRole, req.Message)
+	d, err := h.svc.CreateDiscussion(c.Request.Context(), courseID, req.LessonID, userID, userName, userRole, req.Message, req.Title, req.ParentID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -317,8 +354,11 @@ func (h *Handler) HandleGetReviews(c *gin.Context) {
 
 func (h *Handler) HandleCreateReview(c *gin.Context) {
 	courseID := c.Param("id")
-	userID := c.GetString("userId")
-	userName := c.GetString("userEmail")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
+	userID := c.GetString("userID")
+	userName := c.GetString("userName")
 
 	var req CreateReviewRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -336,6 +376,9 @@ func (h *Handler) HandleCreateReview(c *gin.Context) {
 
 func (h *Handler) HandleGetTutorContext(c *gin.Context) {
 	courseID := c.Param("id")
+	if !h.requireCourseAccess(c, courseID) {
+		return
+	}
 	tutorCtx, err := h.svc.GetCourseSummaryContext(c.Request.Context(), courseID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -345,4 +388,24 @@ func (h *Handler) HandleGetTutorContext(c *gin.Context) {
 		"courseId": courseID,
 		"context":  tutorCtx,
 	})
+}
+
+// HandleCleanupUploads detecta (o, con ?apply=true, elimina) los archivos de
+// /uploads que ningún curso o lección referencia. Por defecto solo informa.
+// Ignora los archivos modificados hace menos de una hora.
+func (h *Handler) HandleCleanupUploads(c *gin.Context) {
+	apply := c.Query("apply") == "true"
+	orphans, err := h.svc.CleanOrphanUploads(c.Request.Context(), apply, time.Hour)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No se pudo revisar el directorio de archivos"})
+		return
+	}
+	var total int64
+	for _, o := range orphans {
+		total += o.SizeBytes
+	}
+	if apply {
+		audit.Record(h.svc.db, c, audit.UploadsCleanup, "uploads", "Limpieza de archivos huérfanos: %d archivos, %d bytes", len(orphans), total)
+	}
+	c.JSON(http.StatusOK, gin.H{"dryRun": !apply, "count": len(orphans), "totalBytes": total, "files": orphans})
 }

@@ -1,6 +1,6 @@
 # DxSTech Edu — Plataforma Educativa Premium
 
-DxSTech Edu es una suite educativa integral de alto rendimiento construida con **Go 1.25+ (Gin)** y una **SPA en Vanilla JavaScript ES Modules**, impulsada por Tailwind CSS, Lucide Icons, SQLite (100% CGO-free con `modernc.org/sqlite`) y la API de Google Gemini bajo el modelo de privacidad BYOK (*Bring Your Own Key*).
+DxSTech Edu es una suite educativa integral de alto rendimiento construida con **Go 1.24+ (Gin)** y una **SPA en Vanilla JavaScript ES Modules**, impulsada por Tailwind CSS, Lucide Icons, SQLite (100% CGO-free con `modernc.org/sqlite`) y la API de Google Gemini bajo el modelo de privacidad BYOK (*Bring Your Own Key*).
 
 ---
 
@@ -10,8 +10,13 @@ Para instalar dependencias y levantar el servidor de desarrollo:
 
 ```bash
 pnpm install
-pnpm dev
+pnpm dev   # ejecuta el servidor con --dev (APP_ENV=development)
 ```
+
+> **Modo desarrollo vs. producción:** si no se define `APP_ENV`, el servidor asume **producción** y exige `JWT_SECRET`.
+> Solo en desarrollo (`--dev`) se siembran usuarios y cursos de demostración (`superadmin@dxstech.edu` / `Admin1234*`,
+> `estudiante@dxstech.edu` / `Student1234*`), se genera un secreto JWT efímero y el gateway de WhatsApp queda sin autenticación.
+> **Nunca expongas una instancia `--dev` a internet.**
 
 La aplicación estará lista y accesible en su navegador:
 
@@ -27,7 +32,7 @@ La aplicación estará lista y accesible en su navegador:
 - **Editor Visual Interactivo**: Ajuste en vivo de coordenadas X/Y en porcentaje, guías visuales, tamaño de tipografía, selector de color, fuentes estándar y alineación.
 - **Carga de Alumnos**:
   - Entrada manual por renglón.
-  - Carga masiva de libros de Excel (`.xlsx`, `.xls`) vía **SheetJS**, reconociendo automáticamente columnas como `nombre`, `alumno` o `estudiante`.
+  - Carga masiva desde Excel (`.xlsx`) o CSV con un lector propio y seguro (ver más abajo), reconociendo automáticamente columnas como `nombre`, `alumno` o `estudiante`.
 - **Código QR de Verificación Digital**:
   - Incorpora un código QR de alta resolución (256px) con posición y tamaño ajustables en la plantilla.
   - Cada certificado emitido recibe un identificador criptográfico único con formato `DXS-YYYY-XXXX`.
@@ -48,7 +53,7 @@ La aplicación estará lista y accesible en su navegador:
 - **Doble Modo según Entorno**:
   - `APP_ENV=development`: Acceso libre e inmediato a todas las funciones sin requerir autenticación.
   - `APP_ENV=production`: Protección y control de acceso.
-- **Importación Inteligente de Destinatarios**: Carga números de teléfono directamente desde archivos Excel (`.xlsx`, `.xls`) o CSV con detección automática de columnas (`telefono`, `celular`, `phone`, `whatsapp`).
+- **Importación Inteligente de Destinatarios**: Carga números de teléfono directamente desde archivos Excel (`.xlsx`) o CSV con detección automática de columnas (`telefono`, `celular`, `phone`, `whatsapp`).
 - **Plantillas Rápidas de Notificación**: Botones de un clic para cargar mensajes de entrega de certificados, avisos de evaluaciones y mensajes de bienvenida.
 - **Asistente Virtual con Base de Conocimiento**:
   - Switch de activación/pausa instantáneo.
@@ -98,8 +103,12 @@ docker run -d \
   -p 3000:3000 \
   -v dxstech_data:/app/data \
   -e APP_ENV=production \
+  -e JWT_SECRET="$(openssl rand -hex 32)" \
   dxstech-edu
 ```
+
+> **Usuario sin privilegios:** la imagen ejecuta el servidor como el usuario `app` (UID 10001), no como root. Al iniciar, el entrypoint corrige la propiedad del volumen `/app/data` si aún pertenece a root (volúmenes creados con versiones anteriores), por lo que no necesitas migrar nada a mano.
+> Guarda el `JWT_SECRET` (por ejemplo en las variables de Coolify): si cambia, todas las sesiones activas se invalidan.
 
 ---
 
@@ -131,11 +140,84 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 | `PORT` | `3000` | Puerto interno en el que escucha Gin |
 | `HOST` | `0.0.0.0` | Permite conexiones externas en el contenedor |
 | `DATA_DIR` | `/app/data` | Ruta donde se almacena SQLite persistente |
+| `JWT_SECRET` | *(obligatorio)* | Secreto de sesión, mínimo 32 caracteres (`openssl rand -hex 32`). El servidor no arranca en producción sin él |
+| `APP_URL` | `https://edu.tuempresa.com` | URL pública (CORS y enlaces de verificación) |
+| `CORS_ORIGINS` | *(vacío)* | Orígenes extra permitidos con credenciales, separados por coma |
+| `TRUSTED_PROXIES` | rangos privados | IP/CIDR de proxies inversos de confianza (separados por coma, o `none`). Solo de ellos se acepta `X-Forwarded-For`, lo que evita falsear la IP para evadir el límite de intentos de login |
+| `BACKUP_ENABLED` / `BACKUP_INTERVAL_HOURS` / `BACKUP_RETENTION` / `BACKUP_DIR` | `true` / `24` / `7` / `$DATA_DIR/backups` | Copias de seguridad automáticas (ver *Copias de seguridad*) |
+| `BOOTSTRAP_ADMIN_EMAIL` / `BOOTSTRAP_ADMIN_PASSWORD` | opcional | Primer SUPERADMIN. Sin contraseña se genera una aleatoria y se imprime una sola vez en el log; debe cambiarse al ingresar |
 
 ### Paso 5: Dominio y SSL
 1. Asigna tu dominio en Coolify (por ejemplo `https://edu.tuempresa.com`).
 2. Coolify generará y renovará automáticamente los certificados SSL con Let's Encrypt.
 3. El generador de certificados detectará automáticamente el dominio HTTPS público a través del encabezado `X-Forwarded-Proto`, generando los códigos QR con la URL definitiva de verificación.
+
+---
+
+## ⚙️ Operación y rendimiento
+
+- **Base de datos (SQLite en modo WAL):** pool de 8 conexiones (varias lecturas en paralelo, escrituras serializadas por SQLite), claves foráneas activas (`ON DELETE CASCADE` se aplica de verdad) e índices en las consultas principales.
+- **Migraciones versionadas:** el esquema vive en `internal/database/migrations.go` y se registra en la tabla `schema_migrations`. Para cambiar el esquema, **agrega una migración nueva al final** (nunca edites una ya publicada). Las bases anteriores al versionado se adoptan automáticamente sin perder datos.
+- **Healthcheck:** `GET /api/health` responde `200` si la base de datos responde y `503` (`degraded`) si no, de modo que Docker, Coolify o Render puedan reiniciar la instancia.
+- **Timeouts:** el servidor usa plazos cortos (10 s de cabeceras, 30 s de lectura/escritura). Las rutas lentas (subida de archivos, generación con IA, certificados masivos y reportes CSV) amplían su plazo solo para ellas.
+- **Compresión y caché:** respuestas gzip para JSON/JS/CSS/HTML/CSV; `/vendor` con caché inmutable, `/js` y `/css` con revalidación (304) y `/api` sin caché.
+- **Archivos subidos:** al borrar o reemplazar una lección, módulo o curso se eliminan de `/uploads` los archivos que ya nadie usa (los compartidos por cursos duplicados se conservan). Para limpiar huérfanos históricos, un administrador puede llamar a `POST /api/courses/uploads/cleanup` (solo informa) y luego a `POST /api/courses/uploads/cleanup?apply=true` (elimina; ignora archivos de la última hora).
+
+---
+
+## 🔐 Seguridad operativa
+
+- **Contraseñas:** mínimo 10 caracteres (y máximo 72 bytes por el límite de bcrypt), con mayúscula, minúscula y número; se rechazan las contraseñas comunes y las que contienen el nombre o el correo del usuario. Los usuarios creados por un administrador deben cambiar su contraseña en el primer ingreso.
+- **Bloqueo de cuentas:** tras 5 contraseñas incorrectas la cuenta se bloquea 15 minutos (también en el cambio de contraseña). Un administrador puede desbloquearla con `POST /api/auth/users/:id/unlock`, o el usuario restableciendo su contraseña. Además, cada IP tiene un límite de 20 fallos por minuto (solo cuentan los fallos, así que un aula o una oficina con una sola IP pública no se bloquea sola).
+- **Logs estructurados:** JSON en producción (texto legible con `--dev`), una línea por petición con `request_id`, usuario, rol, estado y latencia; nunca se registran query strings ni claves. Cada respuesta incluye la cabecera `X-Request-ID`, y los errores internos devuelven ese identificador para que soporte pueda rastrear el problema.
+- **Acceso a evaluaciones y certificados:** un estudiante solo ve y responde las evaluaciones de los cursos en los que está matriculado (el curso y la lección de cada intento salen de la evaluación guardada, no de lo que envíe el cliente). El PDF de un certificado solo lo descarga su titular o un administrador; la verificación pública (`/#verify/CÓDIGO`) devuelve únicamente nombre, curso, horas, docente y fecha, y limita por IP los códigos inexistentes para impedir la enumeración.
+- **Foro y moderación:** el autor o un administrador pueden eliminar una publicación (con sus respuestas); cualquier estudiante matriculado puede reportar publicaciones ajenas. Los administradores revisan la cola en **Administración → Moderación del foro** (descartar el reporte o eliminar la publicación). El historial de reportes conserva el mensaje aunque se elimine.
+- **Auditoría:** además del acceso y la gestión de usuarios, se registran cursos, módulos, lecciones, subidas de archivos, certificados, evaluaciones, matrículas administrativas y WhatsApp. Los administradores pueden consultarla en `GET /api/admin/audit` (filtros `action`, `userId`, `search`, `limit`, `offset`).
+
+---
+
+## 💾 Copias de seguridad
+
+El servidor crea automáticamente una copia de la base de datos SQLite (instantánea consistente, sin detener la aplicación) y de los archivos subidos, en `BACKUP_DIR` (por defecto `/app/data/backups`). Comprueba cada hora y crea una nueva solo si la última es más antigua que `BACKUP_INTERVAL_HOURS` (24 h por defecto); se conservan las últimas `BACKUP_RETENTION` (7).
+
+- **Ver, crear y descargar:** **Administración → Copias de seguridad** (solo SUPERADMIN) o `GET/POST /api/admin/backups` y `GET /api/admin/backups/:nombre`. Cada creación y descarga queda auditada.
+- **Guárdalas fuera del servidor.** Si el disco se pierde, se pierden también las copias que están en él. Descarga una periódicamente (o monta `BACKUP_DIR` en un volumen o disco distinto). Contienen datos personales y contraseñas cifradas: trátalas como confidenciales.
+- **Restaurar** (con el servidor **detenido**):
+
+  ```bash
+  dxstech-server -restore /ruta/dxstech-backup-AAAAMMDD-HHMMSS.tar.gz -yes
+  # Con Docker:
+  docker run --rm -v dxstech_data:/app/data dxstech-edu /app/dxstech-server -restore /app/data/backups/ARCHIVO.tar.gz -yes
+  ```
+
+  Antes de tocar nada se verifica el hash y la integridad de la base (`PRAGMA integrity_check`); lo que había se conserva en `DATA_DIR/pre-restore-<fecha>/` y nunca se borra.
+
+---
+
+## 🧪 Pruebas y CI
+
+```bash
+go test -race ./...                 # backend (incluye la matriz de acceso de todas las rutas de la API)
+cd e2e && npm ci && npx playwright install chromium && npx playwright test   # frontend end-to-end
+```
+
+- **Matriz de acceso:** `cmd/server/routes_test.go` obliga a clasificar cada ruta de `/api` como `public`, `authed`, `enrolled` o `admin` y comprueba cómo responde a un anónimo, a un estudiante y a un administrador. Si agregas una ruta nueva sin declararla, el test falla.
+- **E2E:** `e2e/` levanta el servidor en modo `--dev` con una base temporal y prueba login y permisos de la interfaz, XSS, aula virtual, foro, administración de cursos, contraseña temporal y bloqueo.
+- **CI** (`.github/workflows/ci.yml`): `gofmt`, `go vet`, `go test -race`, sintaxis y ESLint del frontend, verificación de que `web/css/tailwind.css` esté actualizado, pruebas E2E y construcción de la imagen Docker (comprobando que corre sin root con un volumen que pertenece a root).
+
+---
+
+## 🎨 Estilos y librerías del frontend
+
+El frontend **no depende de CDNs en tiempo de ejecución**: Tailwind se compila a `web/css/tailwind.css`, y Lucide y fflate se sirven desde `web/vendor/` con versión fija.
+
+**Lectura de Excel/CSV:** `web/js/utils/spreadsheet.js` lee `.xlsx` (ZIP + XML con `fflate` y el `DOMParser` nativo) y `.csv`, con límites de tamaño (5 MB el archivo, 30 MB descomprimido) y de filas. Reemplaza a SheetJS 0.18.5, que tiene vulnerabilidades conocidas y ya no se publica en npm. El formato antiguo `.xls` no es compatible: se pide guardar como `.xlsx` o `.csv`.
+Si agregas clases de Tailwind nuevas, regenera el CSS y súbelo al repositorio:
+
+```bash
+pnpm install
+pnpm build:css
+```
 
 ---
 
@@ -156,14 +238,14 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 │   ├── quizzes/service.go      # Orquestación de exámenes y persistencia
 │   └── whatsapp/service.go     # Gateway desacoplado, cola con rate limit y bitácora
 ├── web/
-│   ├── index.html              # Shell SPA con Tailwind, Lucide y SheetJS
+│   ├── index.html              # Shell SPA con Tailwind y Lucide
 │   └── js/
 │       ├── main.js             # Enrutador de vistas, verificación QR pública y estado
 │       ├── components/         # Toast, Modal, Loading, Empty State
-│       └── views/              # Certificados, Quizzes, WhatsApp, Ajustes
+│       └── views/              # Vistas; las grandes se dividen en subcarpetas (courses/, certificates/, quizzes/)
 ├── data/                       # Almacenamiento SQLite local (dxstech.db)
 ├── package.json                # Scripts pnpm (dev, build, start)
-├── go.mod                      # Módulo Go 1.25+
+├── go.mod                      # Módulo Go 1.24+
 └── README.md                   # Documentación completa del proyecto
 ```
 

@@ -11,4 +11,8 @@ services:
         value: /app/data
       - key: PORT
         value: 3000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: APP_URL
+        sync: false
     healthCheckPath: /api/health

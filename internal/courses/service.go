@@ -1,8 +1,11 @@
 package courses
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -40,9 +43,11 @@ func (s *Service) ListCourses(ctx context.Context, role, search, category, statu
 			c.thumbnail_url, c.category, c.instructor_name, c.duration_hours,
 			c.level, c.status, c.published_at, c.requirements, c.learning_objectives,
 			c.created_by, c.created_at, c.updated_at,
-			(SELECT COUNT(*) FROM course_modules m WHERE m.course_id = c.id) as modules_count,
-			(SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id) as lessons_count
+			coalesce(mc.cnt, 0) as modules_count,
+			coalesce(lc.cnt, 0) as lessons_count
 		FROM courses c
+		LEFT JOIN (SELECT course_id, COUNT(*) AS cnt FROM course_modules GROUP BY course_id) mc ON mc.course_id = c.id
+		LEFT JOIN (SELECT course_id, COUNT(*) AS cnt FROM lessons GROUP BY course_id) lc ON lc.course_id = c.id
 		WHERE 1=1
 	`)
 
@@ -311,6 +316,8 @@ func (s *Service) UpdateCourse(ctx context.Context, id string, req UpdateCourseR
 		}
 	}
 
+	oldThumbs := s.queryStrings(ctx, `SELECT thumbnail_url FROM courses WHERE id = ?`, id)
+
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE courses SET
 			title = ?, code = ?, short_description = ?, description = ?,
@@ -327,6 +334,7 @@ func (s *Service) UpdateCourse(ctx context.Context, id string, req UpdateCourseR
 	if err != nil {
 		return nil, fmt.Errorf("error al actualizar curso: %w", err)
 	}
+	s.removeUnreferencedUploads(ctx, oldThumbs...)
 
 	return s.GetCourse(ctx, id, "ADMINISTRADOR")
 }
@@ -429,6 +437,10 @@ func (s *Service) ChangeCourseStatus(ctx context.Context, id string, status stri
 }
 
 func (s *Service) DeleteCourse(ctx context.Context, id string) error {
+	// Se recogen las URLs antes de borrar: el CASCADE elimina módulos y lecciones.
+	urls := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE course_id = ?`, id)
+	urls = append(urls, s.queryStrings(ctx, `SELECT thumbnail_url FROM courses WHERE id = ?`, id)...)
+
 	res, err := s.db.ExecContext(ctx, "DELETE FROM courses WHERE id = ?", id)
 	if err != nil {
 		return fmt.Errorf("error al eliminar curso: %w", err)
@@ -437,6 +449,7 @@ func (s *Service) DeleteCourse(ctx context.Context, id string) error {
 	if rowsAffected == 0 {
 		return errors.New("curso no encontrado")
 	}
+	s.removeUnreferencedUploads(ctx, urls...)
 	return nil
 }
 
@@ -509,6 +522,8 @@ func (s *Service) UpdateModule(ctx context.Context, moduleID string, req UpdateM
 }
 
 func (s *Service) DeleteModule(ctx context.Context, moduleID string) error {
+	urls := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE module_id = ?`, moduleID)
+
 	res, err := s.db.ExecContext(ctx, "DELETE FROM course_modules WHERE id = ?", moduleID)
 	if err != nil {
 		return err
@@ -517,6 +532,7 @@ func (s *Service) DeleteModule(ctx context.Context, moduleID string) error {
 	if rowsAffected == 0 {
 		return errors.New("módulo no encontrado")
 	}
+	s.removeUnreferencedUploads(ctx, urls...)
 	return nil
 }
 
@@ -608,6 +624,9 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 		isFreeInt = 1
 	}
 
+	// Archivo anterior: si se reemplaza, el viejo queda huérfano.
+	oldURLs := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE id = ?`, lessonID)
+
 	now := time.Now()
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE lessons SET
@@ -627,6 +646,7 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 	if rowsAffected == 0 {
 		return nil, errors.New("lección no encontrada")
 	}
+	s.removeUnreferencedUploads(ctx, oldURLs...)
 
 	var l Lesson
 	var freeFlag int
@@ -645,6 +665,8 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 }
 
 func (s *Service) DeleteLesson(ctx context.Context, lessonID string) error {
+	urls := s.queryStrings(ctx, `SELECT content_url FROM lessons WHERE id = ?`, lessonID)
+
 	res, err := s.db.ExecContext(ctx, "DELETE FROM lessons WHERE id = ?", lessonID)
 	if err != nil {
 		return err
@@ -653,11 +675,16 @@ func (s *Service) DeleteLesson(ctx context.Context, lessonID string) error {
 	if rowsAffected == 0 {
 		return errors.New("lección no encontrada")
 	}
+	s.removeUnreferencedUploads(ctx, urls...)
 	return nil
 }
 
 // File Upload Handler
 
+const maxUploadBytes = 25 * 1024 * 1024
+
+// allowedExts lista las extensiones admitidas. SVG se excluye a propósito: es
+// XML con scripts embebibles y, servido desde el mismo origen, permitiría XSS.
 var allowedExts = map[string]bool{
 	".pdf":  true,
 	".pptx": true,
@@ -668,17 +695,42 @@ var allowedExts = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
 	".webp": true,
-	".svg":  true,
+}
+
+// matchesMagic comprueba que los primeros bytes del archivo correspondan al
+// formato que declara la extensión, para no confiar en el nombre del cliente.
+func matchesMagic(ext string, head []byte) bool {
+	has := func(off int, sig string) bool {
+		return len(head) >= off+len(sig) && string(head[off:off+len(sig)]) == sig
+	}
+	switch ext {
+	case ".pdf":
+		return has(0, "%PDF-")
+	case ".pptx":
+		return has(0, "PK\x03\x04")
+	case ".ppt":
+		return has(0, "\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1")
+	case ".mp4":
+		return has(4, "ftyp")
+	case ".webm":
+		return has(0, "\x1A\x45\xDF\xA3")
+	case ".png":
+		return has(0, "\x89PNG\r\n\x1a\n")
+	case ".jpg", ".jpeg":
+		return has(0, "\xFF\xD8\xFF")
+	case ".webp":
+		return has(0, "RIFF") && has(8, "WEBP")
+	}
+	return false
 }
 
 func (s *Service) SaveUpload(fileHeader *multipart.FileHeader) (string, error) {
 	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
 	if !allowedExts[ext] {
-		return "", fmt.Errorf("formato no permitido (%s). Se admiten: PDF, PPTX, MP4, WEBM, PNG, JPG, WEBP", ext)
+		return "", fmt.Errorf("formato no permitido (%s). Se admiten: PDF, PPT/PPTX, MP4, WEBM, PNG, JPG, WEBP", ext)
 	}
 
-	// Maximum upload size: 25MB
-	if fileHeader.Size > 25*1024*1024 {
+	if fileHeader.Size > maxUploadBytes {
 		return "", errors.New("el archivo excede el tamaño máximo permitido de 25 MB")
 	}
 
@@ -688,20 +740,36 @@ func (s *Service) SaveUpload(fileHeader *multipart.FileHeader) (string, error) {
 	}
 	defer src.Close()
 
-	// Safe filename
-	cleanBase := filepath.Base(fileHeader.Filename)
-	cleanBase = strings.ReplaceAll(cleanBase, " ", "_")
-	uniqueName := fmt.Sprintf("%d-%s", time.Now().UnixNano(), cleanBase)
+	// Valida el contenido real (magic bytes) antes de escribir nada en disco.
+	head := make([]byte, 16)
+	n, _ := io.ReadFull(src, head)
+	head = head[:n]
+	if !matchesMagic(ext, head) {
+		return "", fmt.Errorf("el contenido del archivo no corresponde a un %s válido", strings.ToUpper(strings.TrimPrefix(ext, ".")))
+	}
+
+	// Nombre generado por el servidor: aleatorio, sin depender del nombre del cliente.
+	rnd := make([]byte, 16)
+	if _, err := rand.Read(rnd); err != nil {
+		return "", fmt.Errorf("error generando nombre de archivo: %w", err)
+	}
+	uniqueName := hex.EncodeToString(rnd) + ext
 	destPath := filepath.Join(s.uploadDir, uniqueName)
 
-	dst, err := os.Create(destPath)
+	dst, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
 		return "", fmt.Errorf("error al guardar archivo en el servidor: %w", err)
 	}
-	defer dst.Close()
 
-	if _, err := io.Copy(dst, src); err != nil {
-		return "", fmt.Errorf("error al escribir contenido: %w", err)
+	// El tamaño declarado por el cliente no es fiable: se limita lo realmente copiado.
+	written, err := io.Copy(dst, io.MultiReader(bytes.NewReader(head), io.LimitReader(src, maxUploadBytes+1)))
+	closeErr := dst.Close()
+	if err != nil || closeErr != nil || written > maxUploadBytes {
+		_ = os.Remove(destPath)
+		if written > maxUploadBytes {
+			return "", errors.New("el archivo excede el tamaño máximo permitido de 25 MB")
+		}
+		return "", errors.New("error al escribir el contenido del archivo")
 	}
 
 	return "/uploads/" + uniqueName, nil
@@ -709,18 +777,27 @@ func (s *Service) SaveUpload(fileHeader *multipart.FileHeader) (string, error) {
 
 // Course Discussions / Q&A Forum
 
+const (
+	maxDiscussionMessage = 5000
+	maxDiscussionTitle   = 150
+)
+
+// GetDiscussions devuelve los hilos del foro (más antiguos primero) con sus
+// respuestas anidadas. El filtro por lección aplica a los hilos; las respuestas
+// siempre acompañan a su hilo.
 func (s *Service) GetDiscussions(ctx context.Context, courseID, lessonID string) ([]CourseDiscussion, error) {
 	query := `
-		SELECT id, course_id, coalesce(lesson_id, ''), user_id, user_name, user_role, message, created_at
+		SELECT id, course_id, coalesce(lesson_id, ''), user_id, user_name, user_role,
+		       title, message, parent_id, created_at
 		FROM course_discussions
 		WHERE course_id = ?
 	`
 	args := []any{courseID}
 	if strings.TrimSpace(lessonID) != "" {
-		query += " AND (lesson_id = ? OR lesson_id = '')"
+		query += " AND (parent_id <> '' OR lesson_id = ? OR lesson_id = '')"
 		args = append(args, lessonID)
 	}
-	query += " ORDER BY created_at ASC LIMIT 100"
+	query += " ORDER BY created_at ASC, id ASC LIMIT 500"
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
@@ -728,29 +805,69 @@ func (s *Service) GetDiscussions(ctx context.Context, courseID, lessonID string)
 	}
 	defer rows.Close()
 
-	list := make([]CourseDiscussion, 0)
+	threads := make([]CourseDiscussion, 0)
+	index := map[string]int{}
+	var replies []CourseDiscussion
 	for rows.Next() {
 		var d CourseDiscussion
-		if err := rows.Scan(&d.ID, &d.CourseID, &d.LessonID, &d.UserID, &d.UserName, &d.UserRole, &d.Message, &d.CreatedAt); err == nil {
-			list = append(list, d)
+		if err := rows.Scan(&d.ID, &d.CourseID, &d.LessonID, &d.UserID, &d.UserName, &d.UserRole, &d.Title, &d.Message, &d.ParentID, &d.CreatedAt); err != nil {
+			continue
+		}
+		d.Replies = []CourseDiscussion{}
+		if d.ParentID == "" {
+			index[d.ID] = len(threads)
+			threads = append(threads, d)
+		} else {
+			replies = append(replies, d)
 		}
 	}
-	return list, nil
+	for _, r := range replies {
+		if i, ok := index[r.ParentID]; ok {
+			threads[i].Replies = append(threads[i].Replies, r)
+		}
+	}
+	return threads, nil
 }
 
-func (s *Service) CreateDiscussion(ctx context.Context, courseID, lessonID, userID, userName, userRole, message string) (*CourseDiscussion, error) {
+// CreateDiscussion publica un hilo nuevo o, si parentID no está vacío, una
+// respuesta a un hilo existente del mismo curso (las respuestas a respuestas se
+// anidan en el hilo raíz).
+func (s *Service) CreateDiscussion(ctx context.Context, courseID, lessonID, userID, userName, userRole, message, title, parentID string) (*CourseDiscussion, error) {
 	msg := strings.TrimSpace(message)
 	if msg == "" {
 		return nil, errors.New("el mensaje no puede estar vacío")
+	}
+	if len([]rune(msg)) > maxDiscussionMessage {
+		return nil, fmt.Errorf("el mensaje no puede superar los %d caracteres", maxDiscussionMessage)
+	}
+	title = strings.TrimSpace(title)
+	if len([]rune(title)) > maxDiscussionTitle {
+		return nil, fmt.Errorf("el título no puede superar los %d caracteres", maxDiscussionTitle)
+	}
+
+	parentID = strings.TrimSpace(parentID)
+	if parentID != "" {
+		var parentParent, parentLesson string
+		err := s.db.QueryRowContext(ctx,
+			`SELECT parent_id, coalesce(lesson_id, '') FROM course_discussions WHERE id = ? AND course_id = ?`,
+			parentID, courseID).Scan(&parentParent, &parentLesson)
+		if err != nil {
+			return nil, errors.New("la discusión a la que respondes no existe en este curso")
+		}
+		if parentParent != "" {
+			parentID = parentParent // se anida en el hilo raíz
+		}
+		lessonID = parentLesson
+		title = ""
 	}
 
 	id := fmt.Sprintf("dsc-%d", time.Now().UnixNano())
 	now := time.Now()
 
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO course_discussions (id, course_id, lesson_id, user_id, user_name, user_role, message, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, id, courseID, lessonID, userID, userName, userRole, msg, now)
+		INSERT INTO course_discussions (id, course_id, lesson_id, user_id, user_name, user_role, title, message, parent_id, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, courseID, lessonID, userID, userName, userRole, title, msg, parentID, now)
 	if err != nil {
 		return nil, fmt.Errorf("error publicando en el foro: %w", err)
 	}
@@ -762,7 +879,10 @@ func (s *Service) CreateDiscussion(ctx context.Context, courseID, lessonID, user
 		UserID:    userID,
 		UserName:  userName,
 		UserRole:  userRole,
+		Title:     title,
 		Message:   msg,
+		ParentID:  parentID,
+		Replies:   []CourseDiscussion{},
 		CreatedAt: now,
 	}, nil
 }

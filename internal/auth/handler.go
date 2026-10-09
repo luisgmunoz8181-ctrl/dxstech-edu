@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -22,9 +23,12 @@ func NewHandler(svc *Service, isProd bool) *Handler {
 
 func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	limiter := NewRateLimiter(15, 1*time.Minute)
+	// Login: el límite por IP cuenta solo los fallos (la defensa principal por
+	// cuenta es el bloqueo temporal tras 5 intentos fallidos).
+	loginLimiter := NewRateLimiter(20, 1*time.Minute)
 
 	// Public routes
-	r.POST("/login", limiter.Middleware(), h.HandleLogin)
+	r.POST("/login", loginLimiter.FailureMiddleware(), h.HandleLogin)
 	r.POST("/logout", h.HandleLogout)
 	r.POST("/forgot-password", limiter.Middleware(), h.HandleForgotPassword)
 	r.POST("/reset-password", limiter.Middleware(), h.HandleResetPassword)
@@ -46,6 +50,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 		adminGroup.POST("", h.HandleCreateUser)
 		adminGroup.PUT("/:id", h.HandleUpdateUser)
 		adminGroup.PATCH("/:id/status", h.HandleToggleUserStatus)
+		adminGroup.POST("/:id/unlock", h.HandleUnlockUser)
 	}
 }
 
@@ -58,6 +63,12 @@ func (h *Handler) HandleLogin(c *gin.Context) {
 
 	resp, err := h.svc.Login(c.Request.Context(), req, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
+		var locked *LockedError
+		if errors.As(err, &locked) {
+			c.Header("Retry-After", strconv.Itoa(int(time.Until(locked.Until).Seconds())+1))
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error(), "code": "ACCOUNT_LOCKED"})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
@@ -100,8 +111,18 @@ func (h *Handler) HandleChangePassword(c *gin.Context) {
 	userID := c.GetString("userID")
 	err := h.svc.ChangePassword(c.Request.Context(), userID, req.CurrentPassword, req.NewPassword, c.ClientIP(), c.Request.UserAgent())
 	if err != nil {
+		var locked *LockedError
+		if errors.As(err, &locked) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error(), "code": "ACCOUNT_LOCKED"})
+			return
+		}
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// El cambio invalida los tokens anteriores: se emite uno nuevo para esta sesión.
+	if token, err := h.svc.IssueToken(c.Request.Context(), userID, 24*time.Hour); err == nil {
+		SetAuthCookie(c, token, 86400, h.isProd)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Contraseña actualizada con éxito"})
@@ -211,5 +232,15 @@ func (h *Handler) HandleToggleUserStatus(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *Handler) HandleUnlockUser(c *gin.Context) {
+	adminID := c.GetString("userID")
+	user, err := h.svc.UnlockUser(c.Request.Context(), adminID, c.Param("id"), c.ClientIP(), c.Request.UserAgent())
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, user)
 }

@@ -1,4 +1,5 @@
 import { Toast } from '../components/toast.js';
+import { esc } from '../utils/escape.js';
 
 export const ProfileView = {
   render() {
@@ -21,18 +22,18 @@ export const ProfileView = {
         <div class="bg-white rounded-3xl p-6 md:p-8 border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div class="flex items-center gap-4">
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-indigo-700 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-indigo-100">
-              ${user.firstName.charAt(0)}${user.lastName.charAt(0)}
+              ${esc(user.firstName.charAt(0))}${esc(user.lastName.charAt(0))}
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <h3 class="text-xl font-bold text-slate-900">${user.firstName} ${user.lastName}</h3>
+                <h3 class="text-xl font-bold text-slate-900">${esc(user.firstName)} ${esc(user.lastName)}</h3>
                 <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${roleBadgeColor}">
-                  ${user.role}
+                  ${esc(user.role)}
                 </span>
               </div>
-              <p class="text-xs text-slate-500 mt-0.5">${user.email}</p>
+              <p class="text-xs text-slate-500 mt-0.5">${esc(user.email)}</p>
               <p class="text-[11px] text-slate-400 mt-1">
-                Estado: <span class="font-semibold text-emerald-600">Activo</span> • ID: <code class="font-mono text-[10px] bg-slate-100 px-1 py-0.5 rounded">${user.id || 'N/A'}</code>
+                Estado: <span class="font-semibold text-emerald-600">Activo</span> • ID: <code class="font-mono text-[10px] bg-slate-100 px-1 py-0.5 rounded">${esc(user.id || 'N/A')}</code>
               </p>
             </div>
           </div>
@@ -54,15 +55,15 @@ export const ProfileView = {
             <div class="space-y-3 text-xs">
               <div class="flex justify-between py-1.5 border-b border-slate-50">
                 <span class="text-slate-400">Identificación / DNI:</span>
-                <span class="font-semibold text-slate-700">${user.identification || 'No registrada'}</span>
+                <span class="font-semibold text-slate-700">${esc(user.identification || 'No registrada')}</span>
               </div>
               <div class="flex justify-between py-1.5 border-b border-slate-50">
                 <span class="text-slate-400">Empresa / Organización:</span>
-                <span class="font-semibold text-slate-700">${user.company || 'DxSTech Academy'}</span>
+                <span class="font-semibold text-slate-700">${esc(user.company || 'DxSTech Academy')}</span>
               </div>
               <div class="flex justify-between py-1.5 border-b border-slate-50">
                 <span class="text-slate-400">Cargo / Posición:</span>
-                <span class="font-semibold text-slate-700">${user.jobTitle || 'Miembro Activo'}</span>
+                <span class="font-semibold text-slate-700">${esc(user.jobTitle || 'Miembro Activo')}</span>
               </div>
               <div class="flex justify-between py-1.5">
                 <span class="text-slate-400">Último Inicio de Sesión:</span>
@@ -86,7 +87,7 @@ export const ProfileView = {
 
               <div>
                 <label class="block text-[11px] font-semibold text-slate-600 mb-1">Nueva Contraseña</label>
-                <input type="password" id="new-pass" required minlength="8" placeholder="Mínimo 8 caracteres (Mayús, minús, número)" class="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
+                <input type="password" id="new-pass" required minlength="10" placeholder="Mínimo 10 caracteres (Mayús, minús, número)" class="w-full text-xs rounded-xl border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden">
               </div>
 
               <div>
@@ -150,6 +151,7 @@ export const ProfileView = {
 
           Toast.success('Contraseña actualizada con éxito');
           changeForm.reset();
+          if (window.router?.currentUser) window.router.currentUser.mustChangePassword = false;
         } catch (err) {
           Toast.error(err.message);
         }

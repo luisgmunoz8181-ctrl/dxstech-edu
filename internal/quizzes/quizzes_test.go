@@ -9,8 +9,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/database"
 	"dxstech-edu/internal/quizzes"
 
@@ -33,7 +35,7 @@ func setupTestDB(t *testing.T) (*database.DB, func()) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 
-	db, err := database.InitDB(tempDir)
+	db, err := database.InitDB(tempDir, true)
 	if err != nil {
 		os.RemoveAll(tempDir)
 		t.Fatalf("failed to init db: %v", err)
@@ -83,15 +85,14 @@ func TestQuizSubmissionAndAutoCompletion(t *testing.T) {
 	}
 
 	r := gin.New()
-	r.Use(func(c *gin.Context) {
-		c.Set("userId", "usr-student-01")
-		c.Next()
-	})
+	r.Use(auth.Authenticate(testSecret))
 	svc.RegisterRoutes(r.Group("/api/quizzes"))
+	studentToken := tokenFor(t, "usr-student-01", "ESTUDIANTE")
 
 	// 2. Test GetByLesson
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/quizzes/lesson/"+lessonID, nil)
+	req.Header.Set("Authorization", "Bearer "+studentToken)
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200 for GetByLesson, got %d: %s", w.Code, w.Body.String())
@@ -110,6 +111,7 @@ func TestQuizSubmissionAndAutoCompletion(t *testing.T) {
 	w = httptest.NewRecorder()
 	req, _ = http.NewRequest("POST", fmt.Sprintf("/api/quizzes/%s/submit", quizID), bytes.NewReader(subJSON))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+studentToken)
 	r.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
@@ -130,4 +132,15 @@ func TestQuizSubmissionAndAutoCompletion(t *testing.T) {
 	if completer.calledWithLesson != lessonID {
 		t.Errorf("Expected completer called with lesson %s, got %s", lessonID, completer.calledWithLesson)
 	}
+}
+
+const testSecret = "test-secret-key-0123456789-0123456789"
+
+func tokenFor(t *testing.T, userID, role string) string {
+	t.Helper()
+	tok, err := auth.GenerateToken(&auth.User{ID: userID, Email: userID + "@test.local", Role: role}, testSecret, time.Hour)
+	if err != nil {
+		t.Fatalf("no se pudo generar token: %v", err)
+	}
+	return tok
 }

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/audit"
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/database"
 
 	"github.com/gin-gonic/gin"
@@ -99,13 +101,53 @@ func NewService(db *database.DB, gemini *ai.GeminiClient, completer LessonComple
 }
 
 func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
-	r.POST("/generate", s.Generate)
-	r.POST("/generate-for-lesson", s.GenerateForLesson)
-	r.GET("/lesson/:lessonId", s.GetByLesson)
-	r.POST("/:id/submit", s.Submit)
-	r.GET("", s.List)
-	r.GET("/:id", s.GetByID)
-	r.DELETE("/:id", s.Delete)
+	admin := auth.RequireRole("SUPERADMIN", "ADMINISTRADOR")
+
+	// Gestión (solo administradores)
+	r.POST("/generate", admin, s.Generate)
+	r.POST("/generate-for-lesson", admin, s.GenerateForLesson)
+	r.GET("", admin, s.List)
+	r.DELETE("/:id", admin, s.Delete)
+
+	// Consumo por estudiantes (requiere sesión)
+	r.GET("/lesson/:lessonId", auth.RequireAuth(), s.GetByLesson)
+	r.POST("/:id/submit", auth.RequireAuth(), s.Submit)
+	r.GET("/:id", auth.RequireAuth(), s.GetByID)
+}
+
+// canAccessQuiz indica si el usuario puede ver o responder una evaluación:
+// administradores siempre; estudiantes solo si la evaluación pertenece a un
+// curso en el que están matriculados. Las evaluaciones sueltas (sin curso) son
+// material de trabajo de los administradores.
+func (s *Service) canAccessQuiz(c *gin.Context, quizCourseID string) bool {
+	if isAdminRole(c) {
+		return true
+	}
+	if quizCourseID == "" {
+		return false
+	}
+	return s.db.UserCanAccessCourse(c.Request.Context(), c.GetString("userID"), c.GetString("userRole"), quizCourseID)
+}
+
+func denyQuiz(c *gin.Context) {
+	c.JSON(http.StatusForbidden, gin.H{"error": "Debes estar matriculado en el curso de esta evaluación para acceder a ella"})
+}
+
+func isAdminRole(c *gin.Context) bool {
+	role := c.GetString("userRole")
+	return role == "SUPERADMIN" || role == "ADMINISTRADOR"
+}
+
+// redactAnswers elimina la clave de respuesta de las preguntas para que los
+// estudiantes no puedan leerla antes de enviar su intento. El resultado
+// correcto solo se devuelve en la retroalimentación de Submit.
+func redactAnswers(questions []ai.QuizQuestion) []ai.QuizQuestion {
+	out := make([]ai.QuizQuestion, len(questions))
+	for i, q := range questions {
+		q.CorrectAnswer = ""
+		out[i] = q
+	}
+	return out
 }
 
 func (s *Service) Generate(c *gin.Context) {
@@ -159,6 +201,7 @@ func (s *Service) Generate(c *gin.Context) {
 		_, _ = s.db.Exec(`UPDATE lessons SET quiz_id = ?, content_type = 'quiz', updated_at = ? WHERE id = ?`, quizID, now, req.LessonID)
 	}
 
+	audit.Record(s.db, c, audit.QuizGenerate, "quizzes", "Evaluación generada con IA: %s (%s, %d preguntas)", req.Title, quizID, len(questions))
 	c.JSON(http.StatusCreated, QuizDetail{
 		ID:            quizID,
 		Title:         req.Title,
@@ -242,6 +285,7 @@ func (s *Service) GenerateForLesson(c *gin.Context) {
 		UPDATE lessons SET quiz_id = ?, content_type = 'quiz', updated_at = ? WHERE id = ?
 	`, quizID, now, req.LessonID)
 
+	audit.Record(s.db, c, audit.QuizGenerate, "quizzes", "Evaluación generada con IA para la lección %s (%s, %d preguntas)", req.LessonID, quizID, len(questions))
 	c.JSON(http.StatusCreated, QuizDetail{
 		ID:            quizID,
 		Title:         "Evaluación: " + title,
@@ -256,7 +300,7 @@ func (s *Service) GenerateForLesson(c *gin.Context) {
 
 func (s *Service) Submit(c *gin.Context) {
 	quizID := c.Param("id")
-	userID := c.GetString("userId")
+	userID := c.GetString("userID")
 
 	var req SubmitQuizRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -274,11 +318,11 @@ func (s *Service) Submit(c *gin.Context) {
 		return
 	}
 
-	if req.CourseID != "" {
-		courseID = req.CourseID
-	}
-	if req.LessonID != "" {
-		lessonID = req.LessonID
+	// Curso y lección salen de la evaluación guardada, nunca del cliente: de lo
+	// contrario se podría marcar progreso (y matricularse) en cualquier curso.
+	if !s.canAccessQuiz(c, courseID) {
+		denyQuiz(c)
+		return
 	}
 
 	var questions []ai.QuizQuestion
@@ -350,7 +394,7 @@ func (s *Service) Submit(c *gin.Context) {
 
 func (s *Service) GetByLesson(c *gin.Context) {
 	lessonID := c.Param("lessonId")
-	userID := c.GetString("userId")
+	userID := c.GetString("userID")
 
 	var q QuizDetail
 	var questionsJSON string
@@ -363,6 +407,15 @@ func (s *Service) GetByLesson(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "No hay evaluación asociada a esta lección"})
+		return
+	}
+
+	accessCourse := q.CourseID
+	if accessCourse == "" {
+		_ = s.db.QueryRowContext(c.Request.Context(), `SELECT course_id FROM lessons WHERE id = ?`, lessonID).Scan(&accessCourse)
+	}
+	if !s.canAccessQuiz(c, accessCourse) {
+		denyQuiz(c)
 		return
 	}
 
@@ -387,6 +440,10 @@ func (s *Service) GetByLesson(c *gin.Context) {
 			}
 			q.UserPassed = passedInt == 1
 		}
+	}
+
+	if !isAdminRole(c) {
+		q.Questions = redactAnswers(q.Questions)
 	}
 
 	c.JSON(http.StatusOK, q)
@@ -417,7 +474,7 @@ func (s *Service) List(c *gin.Context) {
 
 func (s *Service) GetByID(c *gin.Context) {
 	id := c.Param("id")
-	userID := c.GetString("userId")
+	userID := c.GetString("userID")
 
 	var q QuizDetail
 	var questionsJSON string
@@ -429,6 +486,11 @@ func (s *Service) GetByID(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Evaluación no encontrada"})
+		return
+	}
+
+	if !s.canAccessQuiz(c, q.CourseID) {
+		denyQuiz(c)
 		return
 	}
 
@@ -452,6 +514,10 @@ func (s *Service) GetByID(c *gin.Context) {
 		q.UserPassed = passedInt == 1
 	}
 
+	if !isAdminRole(c) {
+		q.Questions = redactAnswers(q.Questions)
+	}
+
 	c.JSON(http.StatusOK, q)
 }
 
@@ -470,5 +536,6 @@ func (s *Service) Delete(c *gin.Context) {
 		return
 	}
 
+	audit.Record(s.db, c, audit.QuizDelete, "quizzes", "Evaluación eliminada: %s", id)
 	c.JSON(http.StatusOK, gin.H{"message": "Evaluación eliminada correctamente", "id": id})
 }

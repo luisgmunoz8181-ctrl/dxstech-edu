@@ -1,4 +1,5 @@
 import { Toast } from '../components/toast.js';
+import { esc } from '../utils/escape.js';
 
 export const DashboardView = {
   overview: null,
@@ -455,8 +456,8 @@ export const DashboardView = {
         <div class="p-3.5 rounded-2xl bg-slate-50/80 border border-slate-100 hover:border-indigo-200 transition-all space-y-2">
           <div class="flex items-center justify-between gap-3">
             <div class="truncate">
-              <span class="text-xs font-bold text-slate-800 truncate block">${cm.courseTitle}</span>
-              <span class="text-[10px] text-slate-400 font-medium">${cm.courseCode} • ${cm.category} • ${cm.durationHours} hrs</span>
+              <span class="text-xs font-bold text-slate-800 truncate block">${esc(cm.courseTitle)}</span>
+              <span class="text-[10px] text-slate-400 font-medium">${esc(cm.courseCode)} • ${esc(cm.category)} • ${cm.durationHours} hrs</span>
             </div>
             <div class="text-right shrink-0">
               <span class="text-xs font-extrabold text-indigo-700">${cm.totalStudents}</span>
@@ -573,7 +574,7 @@ export const DashboardView = {
         if (courseSelect) {
           const currentVal = courseSelect.value;
           courseSelect.innerHTML = `<option value="">Todos los cursos</option>` +
-            this.courses.map(c => `<option value="${c.id}">${c.title} (${c.code})</option>`).join('');
+            this.courses.map(c => `<option value="${esc(c.id)}">${esc(c.title)} (${esc(c.code)})</option>`).join('');
           courseSelect.value = currentVal;
         }
 
@@ -642,9 +643,9 @@ export const DashboardView = {
         : `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">En Curso</span>`;
 
       const certBadge = r.certificateId
-        ? `<a href="/api/certificates/${r.certificateId}/pdf" target="_blank" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors" title="Descargar diploma oficial">
+        ? `<a href="/api/certificates/${esc(r.certificateId)}/pdf" target="_blank" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors" title="Descargar diploma oficial">
             <i data-lucide="award" class="w-3 h-3 text-amber-600"></i>
-            <span>${r.certificateId}</span>
+            <span>${esc(r.certificateId)}</span>
           </a>`
         : `<span class="text-[10px] text-slate-400 italic">Pendiente (100%)</span>`;
 
@@ -660,18 +661,18 @@ export const DashboardView = {
                 ${initials}
               </div>
               <div>
-                <span class="font-bold text-slate-800 block">${r.studentName}</span>
-                <span class="text-[11px] text-slate-400">${r.studentEmail}</span>
+                <span class="font-bold text-slate-800 block">${esc(r.studentName)}</span>
+                <span class="text-[11px] text-slate-400">${esc(r.studentEmail)}</span>
               </div>
             </div>
           </td>
 
           <!-- Course -->
           <td class="py-3 px-4">
-            <span class="font-semibold text-slate-800 block truncate max-w-xs">${r.courseTitle}</span>
+            <span class="font-semibold text-slate-800 block truncate max-w-xs">${esc(r.courseTitle)}</span>
             <div class="flex items-center gap-1.5 mt-0.5">
-              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-600">${r.courseCode}</span>
-              <span class="text-[10px] text-slate-400">${r.category}</span>
+              <span class="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-slate-100 text-slate-600">${esc(r.courseCode)}</span>
+              <span class="text-[10px] text-slate-400">${esc(r.category)}</span>
             </div>
           </td>
 
@@ -708,7 +709,7 @@ export const DashboardView = {
           <!-- Actions -->
           <td class="py-3 px-5 text-right whitespace-nowrap">
             ${r.certificateId ? `
-              <a href="/api/certificates/${r.certificateId}/pdf" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors">
+              <a href="/api/certificates/${esc(r.certificateId)}/pdf" target="_blank" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors">
                 <i data-lucide="download" class="w-3.5 h-3.5"></i>
                 <span>PDF</span>
               </a>

@@ -14,17 +14,21 @@ type Claims struct {
 	RoleID    int    `json:"roleId"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
+	// TokenVersion debe coincidir con users.token_version; al incrementarse en
+	// BD (cambio de contraseña, rol o estado) todos los tokens previos caducan.
+	TokenVersion int `json:"tv"`
 	jwt.RegisteredClaims
 }
 
 func GenerateToken(user *User, secret string, duration time.Duration) (string, error) {
 	claims := Claims{
-		UserID:    user.ID,
-		Email:     user.Email,
-		Role:      user.Role,
-		RoleID:    user.RoleID,
-		FirstName: user.FirstName,
-		LastName:  user.LastName,
+		UserID:       user.ID,
+		Email:        user.Email,
+		Role:         user.Role,
+		RoleID:       user.RoleID,
+		FirstName:    user.FirstName,
+		LastName:     user.LastName,
+		TokenVersion: user.TokenVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(duration)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

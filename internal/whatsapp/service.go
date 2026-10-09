@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"dxstech-edu/internal/ai"
+	"dxstech-edu/internal/audit"
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/database"
 
@@ -75,8 +77,8 @@ func NewService(db *database.DB, gemini *ai.GeminiClient, cfg *config.Config) *S
 }
 
 func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
-	// Public / Student AI Tutor endpoint
-	r.POST("/ask-tutor", s.AskTutor)
+	// Student AI Tutor endpoint (requiere sesión iniciada)
+	r.POST("/ask-tutor", auth.RequireAuth(), s.AskTutor)
 
 	// Admin protected endpoints
 	admin := r.Group("")
@@ -92,35 +94,17 @@ func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
 	}
 }
 
+// productionAuthMiddleware protege el gateway de WhatsApp. En desarrollo
+// (--dev / APP_ENV=development) el acceso es libre para facilitar las pruebas
+// locales; en cualquier otro entorno exige sesión de SUPERADMIN o ADMINISTRADOR.
 func (s *Service) productionAuthMiddleware() gin.HandlerFunc {
+	requireAdmin := auth.RequireRole("SUPERADMIN", "ADMINISTRADOR")
 	return func(c *gin.Context) {
-		// IN DEVELOPMENT: completely free access, no auth required!
-		if s.cfg == nil || s.cfg.IsDevelopment() {
+		if s.cfg != nil && s.cfg.IsDevelopment() {
 			c.Next()
 			return
 		}
-
-		// Allow authenticated admins via JWT HttpOnly cookie or header
-		if role, exists := c.Get("userRole"); exists {
-			if roleStr, ok := role.(string); ok && (roleStr == "SUPERADMIN" || roleStr == "ADMINISTRADOR") {
-				c.Next()
-				return
-			}
-		}
-
-		// IN PRODUCTION: require admin authorization
-		adminPass := "dxstech2026"
-		reqPass := c.GetHeader("X-Admin-Password")
-		user, pass, hasBasic := c.Request.BasicAuth()
-		if reqPass == adminPass || (hasBasic && (pass == adminPass || user == "admin" && pass == adminPass)) {
-			c.Next()
-			return
-		}
-
-		c.Header("WWW-Authenticate", `Basic realm="DxSTech Edu WhatsApp Admin"`)
-		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error": "Acceso protegido en producción. Ingrese con usuario administrador o proporcione credenciales de WhatsApp.",
-		})
+		requireAdmin(c)
 	}
 }
 
@@ -213,6 +197,7 @@ func (s *Service) UpdateConfig(c *gin.Context) {
 		return
 	}
 
+	audit.Record(s.db, c, audit.WhatsAppConfig, "whatsapp_config", "Configuración actualizada (activo=%t, modo estricto=%t)", req.IsActive, req.StrictMode)
 	c.JSON(http.StatusOK, gin.H{"message": "Configuración de WhatsApp guardada exitosamente", "config": req})
 }
 
@@ -278,6 +263,7 @@ func (s *Service) SendBulkMessages(c *gin.Context) {
 		}
 	}(req.Recipients, req.Message, time.Duration(req.DelaySec)*time.Second)
 
+	audit.Record(s.db, c, audit.WhatsAppSend, "whatsapp", "Envío masivo programado: %d destinatarios, %d s entre mensajes", len(req.Recipients), req.DelaySec)
 	c.JSON(http.StatusAccepted, gin.H{
 		"message":  fmt.Sprintf("%d mensaje(s) programados para envío en cola con rate limit", len(req.Recipients)),
 		"inQueue":  len(req.Recipients),
@@ -352,6 +338,7 @@ func (s *Service) ClearLogs(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al vaciar la bitácora: " + err.Error()})
 		return
 	}
+	audit.Record(s.db, c, audit.WhatsAppLogsWipe, "whatsapp_logs", "Bitácora de envíos vaciada")
 	c.JSON(http.StatusOK, gin.H{"message": "Bitácora vaciada correctamente"})
 }
 
@@ -406,6 +393,7 @@ func (s *Service) SyncCourses(c *gin.Context) {
 		return
 	}
 
+	audit.Record(s.db, c, audit.WhatsAppSync, "whatsapp_config", "Base de conocimiento sincronizada con %d cursos", count)
 	c.JSON(http.StatusOK, gin.H{
 		"message":       fmt.Sprintf("Se sincronizaron exitosamente %d cursos a la Base de Conocimiento de WhatsApp", count),
 		"syncedCourses": count,
@@ -430,6 +418,11 @@ func (s *Service) AskTutor(c *gin.Context) {
 	apiKey := req.APIKey
 	if strings.TrimSpace(apiKey) == "" {
 		apiKey = c.GetHeader("X-Gemini-API-Key")
+	}
+
+	if req.CourseID != "" && !s.db.UserCanAccessCourse(c.Request.Context(), c.GetString("userID"), c.GetString("userRole"), req.CourseID) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Debes estar matriculado en este curso para consultar al tutor"})
+		return
 	}
 
 	// Build course context
@@ -470,4 +463,3 @@ func (s *Service) AskTutor(c *gin.Context) {
 		"courseId": req.CourseID,
 	})
 }
-

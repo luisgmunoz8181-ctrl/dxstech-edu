@@ -16,7 +16,7 @@ func setupTestDB(t *testing.T) (*database.DB, string, func()) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 
-	db, err := database.InitDB(tempDir)
+	db, err := database.InitDB(tempDir, true)
 	if err != nil {
 		os.RemoveAll(tempDir)
 		t.Fatalf("failed to init db: %v", err)
@@ -133,7 +133,7 @@ func TestCourseLifecycle(t *testing.T) {
 	}
 
 	// 8. Test Discussions / Forum
-	disc, err := svc.CreateDiscussion(ctx, newCourse.ID, lsn.ID, "usr-student-01", "Carlos Estudiante", "ESTUDIANTE", "¿Cuáles son las herramientas recomendadas para escaneo de puertos?")
+	disc, err := svc.CreateDiscussion(ctx, newCourse.ID, lsn.ID, "usr-student-01", "Carlos Estudiante", "ESTUDIANTE", "¿Cuáles son las herramientas recomendadas para escaneo de puertos?", "Herramientas", "")
 	if err != nil {
 		t.Fatalf("Error creating discussion: %v", err)
 	}

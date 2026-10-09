@@ -7,8 +7,10 @@ import { CertificatesView } from './views/certificates.js';
 import { QuizzesView } from './views/quizzes.js';
 import { WhatsAppView } from './views/whatsapp.js';
 import { SettingsView } from './views/settings.js';
+import { AdminView } from './views/admin.js';
 import { Modal } from './components/modal.js';
 import { Toast } from './components/toast.js';
+import { esc } from './utils/escape.js';
 
 class AppRouter {
   constructor() {
@@ -22,6 +24,7 @@ class AppRouter {
       quizzes: QuizzesView,
       whatsapp: WhatsAppView,
       settings: SettingsView,
+      admin: AdminView,
     };
 
     this.viewTitles = {
@@ -33,6 +36,7 @@ class AppRouter {
       certificates: { title: 'Certificados', subtitle: 'Generación masiva y diseño interactivo en alta fidelidad' },
       quizzes: { title: 'Evaluaciones IA', subtitle: 'Generador inteligente con Gemini y simulador de exámenes' },
       whatsapp: { title: 'WhatsApp + Chatbot IA', subtitle: 'Gateway automatizado con base de conocimiento estricta' },
+      admin: { title: 'Administración', subtitle: 'Auditoría de acciones, moderación del foro y copias de seguridad' },
       settings: { title: 'Configuración & Seguridad', subtitle: 'Gestión local de tu Gemini API Key (BYOK)' },
     };
 
@@ -142,7 +146,7 @@ class AppRouter {
 
     if (this.currentUser) {
       const initials = `${(this.currentUser.firstName || 'U').charAt(0)}${(this.currentUser.lastName || '').charAt(0)}`.toUpperCase();
-      const fullName = `${this.currentUser.firstName} ${this.currentUser.lastName}`;
+      const fullName = `${esc(this.currentUser.firstName)} ${esc(this.currentUser.lastName)}`;
       const roleBadge = this.currentUser.role;
 
       if (userBtn) {
@@ -152,7 +156,7 @@ class AppRouter {
             ${initials}
           </span>
           <div class="flex flex-col text-left leading-tight">
-            <span class="text-xs font-bold text-slate-800">${fullName}</span>
+            <span class="text-xs font-bold text-slate-800">${esc(fullName)}</span>
             <span class="text-[9px] font-semibold text-indigo-600 uppercase tracking-wider">${roleBadge}</span>
           </div>
           <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
@@ -171,6 +175,9 @@ class AppRouter {
       if (mobileDashBtn) mobileDashBtn.style.display = isAdmin ? 'flex' : 'none';
       if (usersNavBtn) usersNavBtn.style.display = isAdmin ? 'flex' : 'none';
       if (mobileUsersBtn) mobileUsersBtn.style.display = isAdmin ? 'flex' : 'none';
+      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"], [data-nav="admin"]').forEach((btn) => {
+        btn.style.display = isAdmin ? 'flex' : 'none';
+      });
     } else {
       if (userBtn) {
         userBtn.className = 'flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50 transition-all text-slate-700 shadow-2xs cursor-pointer';
@@ -192,6 +199,9 @@ class AppRouter {
       if (mobileDashBtn) mobileDashBtn.style.display = 'none';
       if (usersNavBtn) usersNavBtn.style.display = 'none';
       if (mobileUsersBtn) mobileUsersBtn.style.display = 'none';
+      document.querySelectorAll('[data-nav="quizzes"], [data-nav="whatsapp"], [data-nav="admin"]').forEach((btn) => {
+        btn.style.display = 'none';
+      });
     }
 
     if (window.lucide) {
@@ -202,8 +212,15 @@ class AppRouter {
   navigate(viewId) {
     if (!this.views[viewId]) return;
 
+    // Contraseña temporal: el servidor bloquea la API; aquí se dirige al usuario al cambio.
+    if (this.currentUser?.mustChangePassword && viewId !== 'profile' && viewId !== 'login') {
+      Toast.warning('Debes cambiar tu contraseña temporal antes de continuar.');
+      this.navigate('profile');
+      return;
+    }
+
     // RBAC Protection guards
-    if (viewId === 'dashboard' || viewId === 'users') {
+    if (viewId === 'dashboard' || viewId === 'users' || viewId === 'quizzes' || viewId === 'whatsapp' || viewId === 'admin') {
       if (!this.currentUser) {
         Toast.info('Inicia sesión con credenciales de administrador para acceder a este módulo.');
         this.navigate('login');
@@ -344,7 +361,7 @@ class AppRouter {
     `;
 
     try {
-      const res = await fetch(`/api/certificates/verify/${certId}`);
+      const res = await fetch(`/api/certificates/verify/${encodeURIComponent(certId)}`);
       const data = await res.json();
 
       if (res.ok && data.valid) {
@@ -360,19 +377,19 @@ class AppRouter {
                 <span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 mb-2">
                   ✓ Certificado Oficial Auténtico
                 </span>
-                <h3 class="text-xl font-black text-slate-900 leading-tight">${c.studentName}</h3>
+                <h3 class="text-xl font-black text-slate-900 leading-tight">${esc(c.studentName)}</h3>
                 <p class="text-xs text-slate-500 mt-1">ha acreditado satisfactoriamente los requisitos académicos de:</p>
-                <p class="text-sm font-bold text-indigo-700 mt-1">${c.courseTitle}</p>
+                <p class="text-sm font-bold text-indigo-700 mt-1">${esc(c.courseTitle)}</p>
               </div>
 
               <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 text-left space-y-2 text-xs">
                 <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                   <span class="text-slate-400 font-medium">Código de Registro:</span>
-                  <span class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">${c.id}</span>
+                  <span class="font-mono font-bold text-slate-800 bg-white px-2 py-0.5 rounded border border-slate-200">${esc(c.id)}</span>
                 </div>
                 <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                   <span class="text-slate-400 font-medium">Fecha de Emisión:</span>
-                  <span class="font-semibold text-slate-700">${c.issueDate}</span>
+                  <span class="font-semibold text-slate-700">${esc(c.issueDate)}</span>
                 </div>
                 ${c.durationHours ? `
                   <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
@@ -383,7 +400,7 @@ class AppRouter {
                 ${c.instructorName ? `
                   <div class="flex justify-between items-center py-1 border-b border-slate-200/60">
                     <span class="text-slate-400 font-medium">Docente / Director:</span>
-                    <span class="font-semibold text-slate-700">${c.instructorName}</span>
+                    <span class="font-semibold text-slate-700">${esc(c.instructorName)}</span>
                   </div>
                 ` : ''}
                 <div class="flex justify-between items-center py-1">
@@ -393,10 +410,15 @@ class AppRouter {
               </div>
 
               <div class="pt-2 flex flex-wrap items-center justify-center gap-2.5">
-                <a href="/api/certificates/${c.id}/pdf" target="_blank" download="Certificado_${c.id}.pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
+                ${this.currentUser ? `
+                <a href="/api/certificates/${esc(c.id)}/pdf" target="_blank" id="verify-download-pdf" class="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-100 flex items-center gap-2">
                   <i data-lucide="download" class="w-4 h-4"></i>
-                  <span>Descargar Diploma Oficial (PDF)</span>
-                </a>
+                  <span>Descargar mi Diploma (PDF)</span>
+                </a>` : `
+                <a href="#login" class="px-5 py-2.5 rounded-xl text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center gap-2">
+                  <i data-lucide="log-in" class="w-4 h-4"></i>
+                  <span>Inicia sesión para descargar tu diploma</span>
+                </a>`}
                 <button id="copy-verify-url-btn" class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-xs">
                   <i data-lucide="copy" class="w-3.5 h-3.5 text-slate-500"></i>
                   <span>Copiar Enlace</span>
@@ -409,6 +431,22 @@ class AppRouter {
             </div>
           </div>
         `;
+
+        document.getElementById('verify-download-pdf')?.addEventListener('click', async (e) => {
+          // Solo el titular o un administrador puede descargar el PDF; se comprueba antes de abrirlo.
+          e.preventDefault();
+          const res = await fetch(`/api/certificates/${encodeURIComponent(c.id)}/pdf`);
+          if (!res.ok) {
+            Toast.error('Solo el titular del certificado o un administrador puede descargar el PDF.');
+            return;
+          }
+          const url = URL.createObjectURL(await res.blob());
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Certificado_${c.id}.pdf`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
 
         document.getElementById('copy-verify-url-btn')?.addEventListener('click', () => {
           navigator.clipboard.writeText(window.location.href).then(() => {
@@ -435,7 +473,7 @@ class AppRouter {
                 </span>
                 <h3 class="text-lg font-bold text-slate-900">No se pudo verificar el documento</h3>
                 <p class="text-xs text-slate-500 mt-2 max-w-sm mx-auto">
-                  El código <code class="font-mono font-bold text-slate-700 bg-slate-100 px-1 py-0.5 rounded">${certId || 'N/A'}</code> no figura en la base de datos oficial de certificaciones emitidas por DxSTech Edu.
+                  El código <code class="font-mono font-bold text-slate-700 bg-slate-100 px-1 py-0.5 rounded">${esc(certId || 'N/A')}</code> no figura en la base de datos oficial de certificaciones emitidas por DxSTech Edu.
                 </p>
               </div>
 
@@ -449,7 +487,7 @@ class AppRouter {
         `;
       }
     } catch (e) {
-      mainContainer.innerHTML = `<div class="p-6 text-xs text-rose-600 bg-rose-50 rounded-2xl max-w-md mx-auto text-center">Error de red verificando certificado: ${e.message}</div>`;
+      mainContainer.innerHTML = `<div class="p-6 text-xs text-rose-600 bg-rose-50 rounded-2xl max-w-md mx-auto text-center">Error de red verificando certificado: ${esc(e.message)}</div>`;
     }
 
     if (window.lucide) window.lucide.createIcons();

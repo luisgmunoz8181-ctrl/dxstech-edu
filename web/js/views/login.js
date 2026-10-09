@@ -1,5 +1,4 @@
 import { Toast } from '../components/toast.js';
-import { Loading } from '../components/loading.js';
 
 export const LoginView = {
   mode: 'login', // 'login' | 'forgot' | 'reset'
@@ -100,7 +99,7 @@ export const LoginView = {
 
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1">Nueva Contraseña</label>
-              <input type="password" id="reset-new-password" required minlength="8" placeholder="Mínimo 8 caracteres (Mayús, minús, número)" class="w-full text-xs rounded-xl border border-slate-200 px-3.5 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-all">
+              <input type="password" id="reset-new-password" required minlength="10" placeholder="Mínimo 10 caracteres (Mayús, minús, número)" class="w-full text-xs rounded-xl border border-slate-200 px-3.5 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-all">
             </div>
 
             <button type="submit" class="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-md shadow-emerald-100 flex items-center justify-center gap-2">

@@ -1,7 +1,13 @@
+# Registro de las imágenes base. Docker Hub limita las descargas anónimas (HTTP 429)
+# y en CI eso rompe el build de forma intermitente: allí se usa mirror.gcr.io, que
+# sirve las mismas imágenes (mismos digests) sin ese límite:
+#   docker build --build-arg REGISTRY=mirror.gcr.io/library .
+ARG REGISTRY=docker.io/library
+
 # ==============================================================================
 # Stage 1: Build static Go binary
 # ==============================================================================
-FROM golang:1.24-alpine AS builder
+FROM ${REGISTRY}/golang:1.24-alpine AS builder
 
 WORKDIR /src
 
@@ -25,21 +31,28 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
 # ==============================================================================
 # Stage 2: Minimal, secure production runtime
 # ==============================================================================
-FROM alpine:3.21
+FROM ${REGISTRY}/alpine:3.21
 
 WORKDIR /app
 
-# Install SSL root certificates and timezone data
-RUN apk add --no-cache ca-certificates tzdata
+# Install SSL root certificates, timezone data and su-exec (cesión de privilegios)
+RUN apk add --no-cache ca-certificates tzdata su-exec
 
-# Create directory for persistent SQLite storage
-RUN mkdir -p /app/data
+# Usuario sin privilegios que ejecuta la aplicación
+RUN addgroup -S -g 10001 app && adduser -S -H -u 10001 -G app -h /app/data app
+
+# /app (binario y frontend) pertenece a root y es de solo lectura para la aplicación;
+# solo /app/data (SQLite y archivos subidos) es escribible por el usuario `app`.
+RUN mkdir -p /app/data && chown root:root /app && chmod 755 /app && chown app:app /app/data
 
 # Copy compiled binary from builder
 COPY --from=builder /src/dxstech-server /app/dxstech-server
 
 # Copy SPA frontend static assets (HTML, JavaScript ES Modules, Assets)
 COPY web/ /app/web/
+
+# Entrypoint: corrige permisos del volumen y arranca como usuario no-root
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # Configure production environment
 ENV APP_ENV=production \
@@ -53,9 +66,9 @@ VOLUME ["/app/data"]
 # Expose internal HTTP service port
 EXPOSE 3000
 
-# Healthcheck endpoint
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+# Healthcheck endpoint (responde 503 si la base de datos no está disponible)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD wget -qO- http://127.0.0.1:${PORT:-3000}/api/health || exit 1
 
-# Execute server
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["/app/dxstech-server"]

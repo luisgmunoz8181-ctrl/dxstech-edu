@@ -27,3 +27,7 @@ data/
 .gemini/
 .vscode/
 .idea/
+
+# Tests y herramientas de desarrollo que no van en la imagen
+e2e/
+.github/

@@ -17,7 +17,7 @@ func TestAuthFlow(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	db, err := database.InitDB(tmpDir)
+	db, err := database.InitDB(tmpDir, true)
 	if err != nil {
 		t.Fatalf("Error inicializando DB de test: %v", err)
 	}

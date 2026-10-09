@@ -17,7 +17,7 @@ func setupTestDB(t *testing.T) (*database.DB, string, func()) {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 
-	db, err := database.InitDB(tempDir)
+	db, err := database.InitDB(tempDir, true)
 	if err != nil {
 		os.RemoveAll(tempDir)
 		t.Fatalf("failed to init db: %v", err)
@@ -127,5 +127,58 @@ func TestEnrollmentAndProgressFlow(t *testing.T) {
 	}
 	if len(pdfBytes) < 1000 {
 		t.Errorf("Generated PDF seems too small (%d bytes)", len(pdfBytes))
+	}
+}
+
+// Los conteos de lecciones (completadas/totales) deben coincidir con los de la
+// base, tanto en la vista del estudiante como en la del curso.
+func TestLessonCountsMatchDatabase(t *testing.T) {
+	db, _, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	svc := enrollments.NewService(db, certificates.NewService(db))
+	ctx := context.Background()
+
+	var total, done int
+	_ = db.QueryRow(`SELECT COUNT(*) FROM lessons WHERE course_id = 'crs-ai-101'`).Scan(&total)
+	_ = db.QueryRow(`SELECT COUNT(*) FROM lesson_progress WHERE user_id = 'usr-student-01' AND course_id = 'crs-ai-101'`).Scan(&done)
+	if total == 0 || done == 0 {
+		t.Fatalf("el seed demo debería tener lecciones y progreso (total=%d, done=%d)", total, done)
+	}
+
+	mine, err := svc.GetStudentEnrollments(ctx, "usr-student-01")
+	if err != nil || len(mine) != 1 {
+		t.Fatalf("GetStudentEnrollments: %v (%d)", err, len(mine))
+	}
+	if mine[0].TotalLessons != total || mine[0].CompletedLessons != done {
+		t.Errorf("vista del estudiante: %d/%d, esperado %d/%d", mine[0].CompletedLessons, mine[0].TotalLessons, done, total)
+	}
+
+	students, err := svc.ListCourseStudents(ctx, "crs-ai-101")
+	if err != nil || len(students) == 0 {
+		t.Fatalf("ListCourseStudents: %v (%d)", err, len(students))
+	}
+	for _, s := range students {
+		if s.UserID == "usr-student-01" && (s.TotalLessons != total || s.CompletedLessons != done) {
+			t.Errorf("vista del curso: %d/%d, esperado %d/%d", s.CompletedLessons, s.TotalLessons, done, total)
+		}
+	}
+
+	// Un estudiante sin progreso debe dar 0 completadas, no NULL ni error.
+	if _, err := db.Exec(`INSERT INTO enrollments (id, user_id, course_id) VALUES ('enr-x', 'usr-admin-01', 'crs-ai-101')`); err != nil {
+		t.Fatal(err)
+	}
+	students, _ = svc.ListCourseStudents(ctx, "crs-ai-101")
+	found := false
+	for _, s := range students {
+		if s.UserID == "usr-admin-01" {
+			found = true
+			if s.CompletedLessons != 0 || s.TotalLessons != total {
+				t.Errorf("sin progreso: %d/%d, esperado 0/%d", s.CompletedLessons, s.TotalLessons, total)
+			}
+		}
+	}
+	if !found {
+		t.Error("no se listó la matrícula sin progreso")
 	}
 }

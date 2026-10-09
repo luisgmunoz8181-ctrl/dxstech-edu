@@ -1,35 +1,59 @@
 package database
 
 import (
+	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 	_ "modernc.org/sqlite"
 )
 
+// BcryptCost es el costo de bcrypt para generar hashes de contraseña. En
+// producción es el valor por defecto; los tests lo reducen para ir más rápido.
+var BcryptCost = bcrypt.DefaultCost
+
+// maxOpenConns es el tamaño del pool de conexiones SQLite (WAL).
+const maxOpenConns = 8
+
 type DB struct {
 	*sql.DB
 }
 
-func InitDB(dataDir string) (*DB, error) {
+// InitDB abre la base de datos y aplica las migraciones.
+//
+// seedDemo controla si se siembran usuarios, cursos y matrículas de
+// demostración (con credenciales conocidas). Solo debe ser true en desarrollo
+// y tests. Con seedDemo=false, si la base está vacía se crea un único
+// SUPERADMIN inicial (ver bootstrapSuperadmin).
+func InitDB(dataDir string, seedDemo bool) (*DB, error) {
 	if err := os.MkdirAll(dataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 
 	dbPath := filepath.Join(dataDir, "dxstech.db")
-	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)", dbPath)
+	// WAL permite varios lectores concurrentes con un escritor. _txlock=immediate
+	// hace que las transacciones tomen el bloqueo de escritura al inicio y
+	// esperen (busy_timeout) en vez de fallar al promoverlo. foreign_keys activa
+	// los ON DELETE CASCADE declarados en el esquema (SQLite los ignora por defecto).
+	dsn := fmt.Sprintf("%s?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)", dbPath)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
-	// SQLite file databases require serialized write access to avoid SQLITE_BUSY / database is locked.
-	db.SetMaxOpenConns(1)
+	// Pool de conexiones: las lecturas (analytics, catálogo, reportes CSV) ya no
+	// quedan detrás de una única conexión; las escrituras se serializan en SQLite.
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxOpenConns)
 
-	if err := runMigrations(db); err != nil {
+	if err := runMigrations(db, seedDemo); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("database migration failed: %w", err)
 	}
@@ -37,239 +61,14 @@ func InitDB(dataDir string) (*DB, error) {
 	return &DB{DB: db}, nil
 }
 
-func runMigrations(db *sql.DB) error {
-	schema := `
-	CREATE TABLE IF NOT EXISTS roles (
-		id INTEGER PRIMARY KEY,
-		name TEXT UNIQUE NOT NULL,
-		description TEXT NOT NULL
-	);
-
-	INSERT OR IGNORE INTO roles (id, name, description) VALUES
-		(1, 'SUPERADMIN', 'Acceso y control total de la plataforma'),
-		(2, 'ADMINISTRADOR', 'Gestión de usuarios, cursos, contenidos y reportes'),
-		(3, 'ESTUDIANTE', 'Acceso a cursos asignados, aula virtual y certificados');
-
-	CREATE TABLE IF NOT EXISTS users (
-		id TEXT PRIMARY KEY,
-		first_name TEXT NOT NULL,
-		last_name TEXT NOT NULL,
-		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT NOT NULL,
-		role_id INTEGER NOT NULL,
-		status TEXT NOT NULL DEFAULT 'active',
-		email_verified INTEGER NOT NULL DEFAULT 1,
-		must_change_password INTEGER NOT NULL DEFAULT 0,
-		identification TEXT DEFAULT '',
-		company TEXT DEFAULT '',
-		job_title TEXT DEFAULT '',
-		last_login DATETIME,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		password_changed_at DATETIME,
-		FOREIGN KEY (role_id) REFERENCES roles(id)
-	);
-
-	CREATE TABLE IF NOT EXISTS password_resets (
-		id TEXT PRIMARY KEY,
-		email TEXT NOT NULL,
-		token_hash TEXT NOT NULL,
-		expires_at DATETIME NOT NULL,
-		used INTEGER NOT NULL DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS audit_logs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_id TEXT,
-		action TEXT NOT NULL,
-		resource TEXT NOT NULL,
-		ip_address TEXT,
-		user_agent TEXT,
-		details TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS quizzes (
-		id TEXT PRIMARY KEY,
-		title TEXT NOT NULL,
-		notes TEXT,
-		question_count INTEGER NOT NULL,
-		questions_json TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS whatsapp_config (
-		id INTEGER PRIMARY KEY CHECK (id = 1),
-		is_active INTEGER NOT NULL DEFAULT 1,
-		knowledge_base TEXT NOT NULL DEFAULT '',
-		strict_mode INTEGER NOT NULL DEFAULT 1,
-		respond_groups INTEGER NOT NULL DEFAULT 0,
-		provider TEXT NOT NULL DEFAULT 'Simulador / Baileys QR',
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS whatsapp_logs (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		recipient TEXT NOT NULL,
-		message TEXT NOT NULL,
-		status TEXT NOT NULL,
-		error_detail TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS issued_certificates (
-		id TEXT PRIMARY KEY,
-		user_id TEXT,
-		course_id TEXT,
-		student_name TEXT NOT NULL,
-		course_title TEXT NOT NULL,
-		duration_hours REAL NOT NULL DEFAULT 0.0,
-		instructor_name TEXT NOT NULL DEFAULT 'DxSTech Edu',
-		issue_date TEXT NOT NULL,
-		qr_code_url TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS courses (
-		id TEXT PRIMARY KEY,
-		title TEXT NOT NULL,
-		code TEXT UNIQUE NOT NULL,
-		slug TEXT UNIQUE NOT NULL,
-		short_description TEXT NOT NULL DEFAULT '',
-		description TEXT NOT NULL DEFAULT '',
-		thumbnail_url TEXT NOT NULL DEFAULT '',
-		category TEXT NOT NULL DEFAULT 'Tecnología',
-		instructor_name TEXT NOT NULL DEFAULT 'Equipo DxSTech',
-		duration_hours REAL NOT NULL DEFAULT 1.0,
-		level TEXT NOT NULL DEFAULT 'Principiante',
-		status TEXT NOT NULL DEFAULT 'draft',
-		published_at DATETIME,
-		requirements TEXT NOT NULL DEFAULT '',
-		learning_objectives TEXT NOT NULL DEFAULT '',
-		created_by TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-
-	CREATE TABLE IF NOT EXISTS course_modules (
-		id TEXT PRIMARY KEY,
-		course_id TEXT NOT NULL,
-		title TEXT NOT NULL,
-		description TEXT NOT NULL DEFAULT '',
-		order_index INTEGER NOT NULL DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-	);
-
-	CREATE TABLE IF NOT EXISTS lessons (
-		id TEXT PRIMARY KEY,
-		module_id TEXT NOT NULL,
-		course_id TEXT NOT NULL,
-		title TEXT NOT NULL,
-		description TEXT NOT NULL DEFAULT '',
-		content_type TEXT NOT NULL DEFAULT 'text',
-		content_url TEXT NOT NULL DEFAULT '',
-		content_body TEXT NOT NULL DEFAULT '',
-		duration_minutes INTEGER NOT NULL DEFAULT 10,
-		order_index INTEGER NOT NULL DEFAULT 0,
-		is_free_preview INTEGER NOT NULL DEFAULT 0,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (module_id) REFERENCES course_modules(id) ON DELETE CASCADE,
-		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
-	);
-
-	CREATE TABLE IF NOT EXISTS enrollments (
-		id TEXT PRIMARY KEY,
-		user_id TEXT NOT NULL,
-		course_id TEXT NOT NULL,
-		status TEXT NOT NULL DEFAULT 'active',
-		progress_percent REAL NOT NULL DEFAULT 0.0,
-		enrolled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		completed_at DATETIME,
-		last_accessed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_lesson_id TEXT,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-		UNIQUE (user_id, course_id)
-	);
-
-	CREATE TABLE IF NOT EXISTS lesson_progress (
-		id TEXT PRIMARY KEY,
-		user_id TEXT NOT NULL,
-		course_id TEXT NOT NULL,
-		lesson_id TEXT NOT NULL,
-		completed INTEGER NOT NULL DEFAULT 1,
-		completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-		FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
-		UNIQUE (user_id, lesson_id)
-	);
-
-	INSERT OR IGNORE INTO whatsapp_config (id, is_active, knowledge_base, strict_mode, respond_groups, provider)
-	VALUES (1, 1, 'DxSTech Edu es una academia digital líder en tecnología, programación e inteligencia artificial. Ofrecemos cursos prácticos con proyectos reales, tutoría personalizada y certificados digitales verificados.', 1, 0, 'Simulador / Baileys QR');
-	`
-
-	if _, err := db.Exec(schema); err != nil {
+func runMigrations(db *sql.DB, seedDemo bool) error {
+	if err := migrate(db); err != nil {
 		return err
 	}
 
-	// Migración incremental segura para issued_certificates
-	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN user_id TEXT;")
-	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN course_id TEXT;")
-	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN duration_hours REAL DEFAULT 0.0;")
-	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN instructor_name TEXT DEFAULT 'DxSTech Edu';")
-	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_cert_user_course ON issued_certificates(user_id, course_id);")
-
-	// Migración incremental segura para Fase 6: Quizzes vinculados, entregas, foros y valoraciones
-	_, _ = db.Exec("ALTER TABLE lessons ADD COLUMN quiz_id TEXT DEFAULT '';")
-	_, _ = db.Exec("ALTER TABLE quizzes ADD COLUMN course_id TEXT DEFAULT '';")
-	_, _ = db.Exec("ALTER TABLE quizzes ADD COLUMN lesson_id TEXT DEFAULT '';")
-
-	phase6Schema := `
-	CREATE TABLE IF NOT EXISTS quiz_submissions (
-		id TEXT PRIMARY KEY,
-		quiz_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		course_id TEXT NOT NULL DEFAULT '',
-		lesson_id TEXT NOT NULL DEFAULT '',
-		score REAL NOT NULL,
-		passed INTEGER NOT NULL DEFAULT 0,
-		answers_json TEXT NOT NULL DEFAULT '',
-		submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);
-
-	CREATE TABLE IF NOT EXISTS course_discussions (
-		id TEXT PRIMARY KEY,
-		course_id TEXT NOT NULL,
-		lesson_id TEXT NOT NULL DEFAULT '',
-		user_id TEXT NOT NULL,
-		user_name TEXT NOT NULL,
-		user_role TEXT NOT NULL DEFAULT 'ESTUDIANTE',
-		message TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);
-
-	CREATE TABLE IF NOT EXISTS course_reviews (
-		id TEXT PRIMARY KEY,
-		course_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		user_name TEXT NOT NULL,
-		rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
-		comment TEXT NOT NULL DEFAULT '',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-		UNIQUE(course_id, user_id)
-	);
-	`
-	_, _ = db.Exec(phase6Schema)
+	if !seedDemo {
+		return bootstrapSuperadmin(db)
+	}
 
 	if err := seedDefaultUsers(db); err != nil {
 		return err
@@ -280,6 +79,57 @@ func runMigrations(db *sql.DB) error {
 	}
 
 	return seedDemoEnrollments(db)
+}
+
+// bootstrapSuperadmin crea el primer SUPERADMIN cuando no existe ningún usuario.
+//
+// Credenciales: BOOTSTRAP_ADMIN_EMAIL (por defecto superadmin@dxstech.edu) y
+// BOOTSTRAP_ADMIN_PASSWORD. Si no se define contraseña, se genera una aleatoria
+// que se imprime una única vez en el log. En ambos casos el usuario queda con
+// must_change_password=1.
+func bootstrapSuperadmin(db *sql.DB) error {
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	email := strings.ToLower(strings.TrimSpace(os.Getenv("BOOTSTRAP_ADMIN_EMAIL")))
+	if email == "" {
+		email = "superadmin@dxstech.edu"
+	}
+
+	password := os.Getenv("BOOTSTRAP_ADMIN_PASSWORD")
+	generated := false
+	if password == "" {
+		b := make([]byte, 18)
+		if _, err := rand.Read(b); err != nil {
+			return err
+		}
+		password = base64.RawURLEncoding.EncodeToString(b)
+		generated = true
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), BcryptCost)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec(`
+		INSERT INTO users (id, first_name, last_name, email, password_hash, role_id, status, email_verified, must_change_password)
+		VALUES ('usr-superadmin-01', 'Super', 'Admin', ?, ?, 1, 'active', 1, 1)
+	`, email, string(hash))
+	if err != nil {
+		return err
+	}
+
+	log.Printf("🔐 Se creó el SUPERADMIN inicial: %s", email)
+	if generated {
+		log.Printf("🔐 Contraseña temporal (se muestra una sola vez, cámbiela al ingresar): %s", password)
+	}
+	return nil
 }
 
 func seedDefaultUsers(db *sql.DB) error {
@@ -295,13 +145,13 @@ func seedDefaultUsers(db *sql.DB) error {
 
 	// Hashes de contraseñas de desarrollo para testing inmediato
 	// Admin1234* para Superadmin y Administrador
-	adminHash, err := bcrypt.GenerateFromPassword([]byte("Admin1234*"), bcrypt.DefaultCost)
+	adminHash, err := bcrypt.GenerateFromPassword([]byte("Admin1234*"), BcryptCost)
 	if err != nil {
 		return err
 	}
 
 	// Student1234* para Estudiante
-	studentHash, err := bcrypt.GenerateFromPassword([]byte("Student1234*"), bcrypt.DefaultCost)
+	studentHash, err := bcrypt.GenerateFromPassword([]byte("Student1234*"), BcryptCost)
 	if err != nil {
 		return err
 	}
@@ -477,4 +327,21 @@ func seedDemoEnrollments(db *sql.DB) error {
 	`)
 
 	return err
+}
+
+// UserCanAccessCourse indica si el usuario puede acceder al contenido
+// interactivo de un curso (foro, tutor, reseñas): administradores siempre;
+// estudiantes solo si están matriculados (y no han abandonado el curso).
+func (d *DB) UserCanAccessCourse(ctx context.Context, userID, role, courseID string) bool {
+	if role == "SUPERADMIN" || role == "ADMINISTRADOR" {
+		return true
+	}
+	if userID == "" || courseID == "" {
+		return false
+	}
+	var n int
+	err := d.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM enrollments WHERE user_id = ? AND course_id = ? AND status != 'dropped'`,
+		userID, courseID).Scan(&n)
+	return err == nil && n > 0
 }

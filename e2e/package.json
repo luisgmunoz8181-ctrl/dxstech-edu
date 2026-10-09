@@ -1,0 +1,12 @@
+{
+  "name": "dxstech-edu-e2e",
+  "private": true,
+  "description": "Pruebas end-to-end del frontend (Playwright). Ver README.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}
