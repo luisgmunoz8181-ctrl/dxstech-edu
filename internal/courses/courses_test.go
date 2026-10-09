@@ -131,4 +131,38 @@ func TestCourseLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error deleting duplicated course: %v", err)
 	}
+
+	// 8. Test Discussions / Forum
+	disc, err := svc.CreateDiscussion(ctx, newCourse.ID, lsn.ID, "usr-student-01", "Carlos Estudiante", "ESTUDIANTE", "¿Cuáles son las herramientas recomendadas para escaneo de puertos?")
+	if err != nil {
+		t.Fatalf("Error creating discussion: %v", err)
+	}
+	if disc.ID == "" || disc.Message == "" {
+		t.Errorf("Invalid discussion created: %+v", disc)
+	}
+
+	discs, err := svc.GetDiscussions(ctx, newCourse.ID, lsn.ID)
+	if err != nil || len(discs) == 0 {
+		t.Fatalf("Expected discussions list, got error: %v, count: %d", err, len(discs))
+	}
+
+	// 9. Test Reviews / Ratings
+	rev, err := svc.CreateReview(ctx, newCourse.ID, "usr-student-01", "Carlos Estudiante", 5, "Excelente contenido y muy práctico.")
+	if err != nil {
+		t.Fatalf("Error creating review: %v", err)
+	}
+	if rev.Rating != 5 {
+		t.Errorf("Expected 5 star rating, got %d", rev.Rating)
+	}
+
+	revSummary, err := svc.GetReviews(ctx, newCourse.ID)
+	if err != nil || revSummary.TotalReviews != 1 || revSummary.AverageRating != 5.0 {
+		t.Errorf("Invalid review summary: %+v", revSummary)
+	}
+
+	// 10. Test Course Summary Context
+	summaryCtx, err := svc.GetCourseSummaryContext(ctx, newCourse.ID)
+	if err != nil || summaryCtx == "" {
+		t.Errorf("Expected summary context, got error: %v, text: %s", err, summaryCtx)
+	}
 }

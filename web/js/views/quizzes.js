@@ -92,6 +92,14 @@ export const QuizzesView = {
                 <input type="text" id="quiz-title-input" placeholder="Ej: Fundamentos de Arquitectura de Software y APIs REST en Go" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium">
               </div>
 
+              <!-- Link to LMS Course (Optional) -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Vincular a Curso del LMS (Opcional)</label>
+                <select id="quiz-course-select" class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium">
+                  <option value="">Ninguno / Evaluación General</option>
+                </select>
+              </div>
+
               <!-- Question count slider (3-15) -->
               <div>
                 <div class="flex items-center justify-between mb-1.5">
@@ -241,6 +249,26 @@ export const QuizzesView = {
   mount() {
     this.bindEvents();
     this.fetchQuizzes();
+    this.loadCourseOptions();
+  },
+
+  async loadCourseOptions() {
+    try {
+      const res = await fetch('/api/courses');
+      if (!res.ok) return;
+      const courses = await res.json();
+      const select = document.getElementById('quiz-course-select');
+      if (!select) return;
+
+      courses.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.title} (${c.code})`;
+        select.appendChild(opt);
+      });
+    } catch {
+      // Safe ignore
+    }
   },
 
   bindEvents() {
@@ -365,13 +393,14 @@ Los códigos de respuesta HTTP esenciales son: 200 OK, 201 Created, 400 Bad Requ
     Loading.overlay(`Gemini está formulando ${count} preguntas pedagógicas...`);
 
     try {
+      const courseId = document.getElementById('quiz-course-select')?.value || '';
       const response = await fetch('/api/quizzes/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Gemini-API-Key': apiKey,
         },
-        body: JSON.stringify({ title, notes, count }),
+        body: JSON.stringify({ title, notes, count, courseId }),
       });
 
       if (!response.ok) {
@@ -470,7 +499,10 @@ Los códigos de respuesta HTTP esenciales son: 200 OK, 201 Created, 400 Bad Requ
 
       html += `
         <tr class="hover:bg-slate-50/80 transition-colors">
-          <td class="py-3 px-4 font-semibold text-slate-800 max-w-xs truncate">${this.escapeHtml(q.title)}</td>
+          <td class="py-3 px-4 font-semibold text-slate-800 max-w-xs truncate">
+            ${this.escapeHtml(q.title)}
+            ${q.courseId ? `<span class="inline-block bg-indigo-50 text-indigo-700 font-semibold px-1.5 py-0.2 rounded text-[10px] ml-1.5 border border-indigo-200">🎓 Curso</span>` : ''}
+          </td>
           <td class="py-3 px-4">
             <span class="bg-purple-50 text-purple-700 font-semibold px-2 py-0.5 rounded-md text-[11px]">
               ${q.questionCount} preguntas

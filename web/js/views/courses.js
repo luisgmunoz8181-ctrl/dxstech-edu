@@ -208,6 +208,22 @@ export const CoursesView = {
               </button>
             `) : ''}
 
+            <!-- Community & AI Tools -->
+            <button id="open-tutor-modal-btn" class="px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer" title="Consultar al Tutor IA">
+              <i data-lucide="bot" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Tutor IA</span>
+            </button>
+
+            <button id="open-discussions-modal-btn" class="px-3 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer" title="Foro de Dudas y Preguntas">
+              <i data-lucide="message-square" class="w-4 h-4 text-indigo-600"></i>
+              <span class="hidden md:inline">Foro</span>
+            </button>
+
+            <button id="open-reviews-modal-btn" class="px-3 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer" title="Calificaciones y Reseñas">
+              <i data-lucide="star" class="w-4 h-4 text-amber-500 fill-amber-400"></i>
+              <span class="hidden md:inline">Opiniones</span>
+            </button>
+
             ${isAdmin ? `
               <button id="view-students-btn" class="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer" title="Ver estudiantes matriculados">
                 <i data-lucide="users" class="w-3.5 h-3.5 text-indigo-600"></i>
@@ -272,7 +288,8 @@ export const CoursesView = {
                         mp4: 'film',
                         pdf: 'file-text',
                         pptx: 'presentation',
-                        text: 'align-left'
+                        text: 'align-left',
+                        quiz: 'help-circle'
                       }[lsn.contentType] || 'file';
 
                       return `
@@ -408,6 +425,43 @@ export const CoursesView = {
           </div>
         </div>
       `;
+    } else if (l.contentType === 'quiz') {
+      viewerHTML = `
+        <div id="lesson-quiz-player" class="bg-slate-50/70 rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-4">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shrink-0">
+                <i data-lucide="help-circle" class="w-6 h-6"></i>
+              </div>
+              <div>
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase tracking-wider">
+                  Evaluación Interactiva IA
+                </span>
+                <h4 class="text-base font-bold text-slate-900 mt-0.5">Test de Conocimientos y Validación Pedagógica</h4>
+              </div>
+            </div>
+
+            <div id="lesson-quiz-status-pill">
+              ${isCompleted ? `
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-2xs">
+                  <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i> Aprobado (>= 70%)
+                </span>
+              ` : `
+                <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1.5 shadow-2xs">
+                  <i data-lucide="award" class="w-3.5 h-3.5 text-amber-600"></i> Mínimo 70% para Aprobar
+                </span>
+              `}
+            </div>
+          </div>
+
+          <div id="lesson-quiz-container" class="space-y-6">
+            <div class="py-12 text-center text-slate-400">
+              <div class="w-8 h-8 border-3 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin mx-auto mb-3"></div>
+              <p class="text-xs font-medium">Cargando reactivos de evaluación con Gemini...</p>
+            </div>
+          </div>
+        </div>
+      `;
     } else {
       // Text / Guide content
       viewerHTML = `
@@ -434,10 +488,17 @@ export const CoursesView = {
           <!-- Progress Action Buttons -->
           ${user ? `
             <div class="flex items-center gap-2 shrink-0">
-              <button id="toggle-lesson-progress-btn" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'}">
-                <i data-lucide="${isCompleted ? 'check-circle-2' : 'check'}" class="w-4 h-4"></i>
-                <span>${isCompleted ? 'Lección Completada ✓' : 'Marcar como Completada'}</span>
-              </button>
+              ${l.contentType === 'quiz' ? `
+                <div class="px-3.5 py-2 rounded-xl text-xs font-bold ${isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-300' : 'bg-amber-50 text-amber-700 border border-amber-300'} flex items-center gap-1.5 shadow-2xs">
+                  <i data-lucide="${isCompleted ? 'check-circle-2' : 'award'}" class="w-4 h-4"></i>
+                  <span>${isCompleted ? 'Evaluación Aprobada ✓' : 'Aprobación Requerida (≥ 70%)'}</span>
+                </div>
+              ` : `
+                <button id="toggle-lesson-progress-btn" class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${isCompleted ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 hover:bg-emerald-100' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100'}">
+                  <i data-lucide="${isCompleted ? 'check-circle-2' : 'check'}" class="w-4 h-4"></i>
+                  <span>${isCompleted ? 'Lección Completada ✓' : 'Marcar como Completada'}</span>
+                </button>
+              `}
 
               ${nextLesson ? `
                 <button id="next-lesson-btn" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors flex items-center gap-1 cursor-pointer">
@@ -582,6 +643,24 @@ export const CoursesView = {
       });
     }
 
+    // Tutor IA button from classroom header
+    const openTutorBtn = document.getElementById('open-tutor-modal-btn');
+    if (openTutorBtn) {
+      openTutorBtn.addEventListener('click', () => this.openTutorModal());
+    }
+
+    // Discussions forum button from classroom header
+    const openDiscBtn = document.getElementById('open-discussions-modal-btn');
+    if (openDiscBtn) {
+      openDiscBtn.addEventListener('click', () => this.openDiscussionsModal());
+    }
+
+    // Reviews button from classroom header
+    const openReviewsBtn = document.getElementById('open-reviews-modal-btn');
+    if (openReviewsBtn) {
+      openReviewsBtn.addEventListener('click', () => this.openReviewsModal());
+    }
+
     // Add module button
     const addModBtn = document.getElementById('add-module-btn');
     if (addModBtn) {
@@ -666,6 +745,11 @@ export const CoursesView = {
         this.deleteLesson(btn.dataset.delLesson);
       });
     });
+
+    // Check if current lesson is an interactive quiz
+    if (this.selectedLesson && this.selectedLesson.contentType === 'quiz') {
+      this.loadLessonQuiz(this.selectedLesson);
+    }
   },
 
   async fetchCourses() {
@@ -1423,6 +1507,7 @@ export const CoursesView = {
                 <option value="pptx" ${lesson?.contentType === 'pptx' ? 'selected' : ''}>📊 Presentación PPTX</option>
                 <option value="mp4" ${lesson?.contentType === 'mp4' ? 'selected' : ''}>🎬 Video MP4</option>
                 <option value="text" ${lesson?.contentType === 'text' ? 'selected' : ''}>📝 Texto / Guía Teórica</option>
+                <option value="quiz" ${lesson?.contentType === 'quiz' ? 'selected' : ''}>📝 Cuestionario / Evaluación IA</option>
               </select>
             </div>
             <div>
@@ -1432,7 +1517,7 @@ export const CoursesView = {
           </div>
 
           <!-- URL / Upload File Container -->
-          <div id="lesson-url-box">
+          <div id="lesson-url-box" class="${lesson?.contentType === 'quiz' ? 'hidden' : ''}">
             <label class="block font-semibold text-slate-700 mb-1">URL o Archivo Adjunto</label>
             <div class="flex gap-2">
               <input type="text" id="lesson-url" value="${lesson?.contentURL || ''}" placeholder="https://www.youtube.com/watch?v=... o archivo subido" class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs">
@@ -1442,6 +1527,28 @@ export const CoursesView = {
                 <input type="file" id="lesson-file-input" class="hidden">
               </label>
             </div>
+          </div>
+
+          <!-- Quiz AI Generator Box -->
+          <div id="lesson-quiz-box" class="p-3 bg-purple-50 rounded-2xl border border-purple-200 space-y-2 ${lesson?.contentType === 'quiz' ? '' : 'hidden'}">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                <i data-lucide="sparkles" class="w-4 h-4 text-purple-600"></i> Generación Automática con Gemini
+              </span>
+              ${isEdit ? `
+                <button type="button" id="btn-autogen-lesson-quiz" class="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer shadow-xs transition-colors">
+                  <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+                  <span>Generar Preguntas con IA</span>
+                </button>
+              ` : `
+                <span class="text-[10px] text-purple-600 bg-white px-2 py-0.5 rounded-md font-semibold border border-purple-200">
+                  Guarda la lección para activar el generador IA
+                </span>
+              `}
+            </div>
+            <p class="text-[11px] text-purple-700 leading-tight">
+              Gemini formulará 5 preguntas pedagógicas de opción múltiple con autocalificación basadas en el título, descripción y notas de esta lección.
+            </p>
           </div>
 
           <!-- Rich Text Body for text types -->
@@ -1481,6 +1588,7 @@ export const CoursesView = {
           const payload = {
             title, contentType, durationMinutes, contentUrl, contentBody, description, isFreePreview,
             orderIndex: lesson?.orderIndex || 1,
+            quizId: lesson?.quizId || null,
           };
 
           const url = isEdit ? `/api/courses/lessons/${lesson.id}` : `/api/courses/modules/${moduleId}/lessons`;
@@ -1504,8 +1612,34 @@ export const CoursesView = {
       }
     });
 
-    // File upload handler inside Lesson Modal
+    // Event listeners inside Lesson Modal
     setTimeout(() => {
+      // Toggle between URL/File box and Quiz box
+      document.getElementById('lesson-type')?.addEventListener('change', (e) => {
+        const isQuiz = e.target.value === 'quiz';
+        const quizBox = document.getElementById('lesson-quiz-box');
+        const urlBox = document.getElementById('lesson-url-box');
+        if (quizBox) quizBox.classList.toggle('hidden', !isQuiz);
+        if (urlBox) urlBox.classList.toggle('hidden', isQuiz);
+      });
+
+      // Autogen quiz with Gemini button
+      document.getElementById('btn-autogen-lesson-quiz')?.addEventListener('click', async () => {
+        if (!lesson || !lesson.id) {
+          Toast.warning('Debes guardar la lección primero para asociar las preguntas pedagógicas.');
+          return;
+        }
+
+        let apiKey = localStorage.getItem('dxstech_gemini_api_key');
+        if (!apiKey) {
+          Modal.promptGeminiKey({
+            onSaved: (key) => this.generateQuizForLesson(lesson.id, key)
+          });
+          return;
+        }
+        await this.generateQuizForLesson(lesson.id, apiKey);
+      });
+
       document.getElementById('lesson-file-input')?.addEventListener('change', async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -1598,6 +1732,707 @@ export const CoursesView = {
     } catch (e) {
       Toast.error(e.message);
     }
+  },
+
+  async generateQuizForLesson(lessonId, apiKey) {
+    Loading.show('Gemini está creando las preguntas pedagógicas para la lección...');
+    try {
+      const res = await fetch('/api/quizzes/generate-for-lesson', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Gemini-API-Key': apiKey || '',
+        },
+        body: JSON.stringify({ lessonId, count: 5 }),
+      });
+      const data = await res.json();
+      Loading.hide();
+      if (!res.ok) throw new Error(data.error);
+
+      Toast.success('¡Evaluación con IA generada exitosamente!');
+      Modal.close();
+      await this.openCourse(this.selectedCourse.id);
+      this.selectLessonById(lessonId);
+    } catch (err) {
+      Loading.hide();
+      Toast.error('Error generando evaluación: ' + err.message);
+    }
+  },
+
+  async loadLessonQuiz(lesson) {
+    const container = document.getElementById('lesson-quiz-container');
+    if (!container) return;
+
+    try {
+      const res = await fetch(`/api/quizzes/lesson/${lesson.id}`);
+      const user = window.router?.currentUser;
+      const isAdmin = user && ['SUPERADMIN', 'ADMINISTRADOR'].includes(user.role);
+
+      if (!res.ok) {
+        if (isAdmin) {
+          container.innerHTML = `
+            <div class="p-8 text-center bg-white rounded-2xl border border-dashed border-purple-300 space-y-4">
+              <div class="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center mx-auto">
+                <i data-lucide="sparkles" class="w-6 h-6"></i>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold text-slate-800">Esta lección aún no tiene preguntas generadas</h4>
+                <p class="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                  Puedes formular automáticamente preguntas pedagógicas de opción múltiple con Google Gemini basadas en los temas de esta lección.
+                </p>
+              </div>
+              <button id="btn-lesson-autogen-now" class="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-2 mx-auto cursor-pointer shadow-md shadow-purple-100 transition-all">
+                <i data-lucide="bot" class="w-4 h-4"></i>
+                <span>Autogenerar Evaluación con IA Ahora</span>
+              </button>
+            </div>
+          `;
+          if (window.lucide) window.lucide.createIcons();
+          document.getElementById('btn-lesson-autogen-now')?.addEventListener('click', () => {
+            let apiKey = localStorage.getItem('dxstech_gemini_api_key');
+            if (!apiKey) {
+              Modal.promptGeminiKey({
+                onSaved: (key) => this.generateQuizForLesson(lesson.id, key)
+              });
+              return;
+            }
+            this.generateQuizForLesson(lesson.id, apiKey);
+          });
+        } else {
+          container.innerHTML = `
+            <div class="p-8 text-center bg-white rounded-2xl border border-slate-200">
+              <i data-lucide="clock" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
+              <h4 class="text-sm font-bold text-slate-700">Evaluación en Preparación</h4>
+              <p class="text-xs text-slate-400 mt-1">El docente o tutor está formulando los reactivos de esta lección.</p>
+            </div>
+          `;
+          if (window.lucide) window.lucide.createIcons();
+        }
+        return;
+      }
+
+      const quiz = await res.json();
+      this.activeLessonQuiz = quiz;
+
+      if (!quiz.questions || quiz.questions.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">No hay preguntas registradas en este examen.</p>`;
+        return;
+      }
+
+      const isPassed = quiz.userPassed || this.completedLessons.includes(lesson.id);
+
+      let html = `
+        <div class="space-y-5">
+          ${isPassed ? `
+            <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-800 flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold shrink-0">
+                <i data-lucide="award" class="w-4 h-4"></i>
+              </div>
+              <div>
+                <p class="font-bold">¡Has completado y aprobado satisfactoriamente esta evaluación!</p>
+                <p class="text-[11px] text-emerald-700 mt-0.5">Calificación obtenida: ${quiz.latestScore ? Math.round(quiz.latestScore) : 100}%. Puedes presentarla nuevamente si deseas repasar.</p>
+              </div>
+            </div>
+          ` : ''}
+
+          <div class="space-y-4">
+            ${quiz.questions.map((q, idx) => `
+              <div class="p-4 sm:p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3 quiz-q-card transition-all" data-q-idx="${idx}">
+                <div class="flex items-start gap-2.5">
+                  <span class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0 border border-indigo-100">
+                    ${idx + 1}
+                  </span>
+                  <p class="font-bold text-slate-800 text-xs sm:text-sm leading-relaxed">${q.question}</p>
+                </div>
+
+                <div class="space-y-2 pt-1 pl-8">
+                  ${q.options.map((opt, optIdx) => `
+                    <label class="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200/80 hover:bg-indigo-50/50 hover:border-indigo-200 cursor-pointer transition-colors text-xs text-slate-700 font-medium opt-row">
+                      <input type="radio" name="lesson-quiz-q-${idx}" value="${opt.replace(/"/g, '&quot;')}" class="w-4 h-4 text-indigo-600 focus:ring-indigo-500">
+                      <span>${opt}</span>
+                    </label>
+                  `).join('')}
+                </div>
+
+                <div id="quiz-feedback-${idx}" class="hidden pt-2 pl-8 text-xs font-semibold"></div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="pt-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-200/80">
+            <p id="quiz-submit-summary" class="text-xs text-slate-500 font-medium">
+              Porcentaje mínimo requerido para aprobar y registrar avance: <strong>70%</strong>
+            </p>
+            <button id="submit-lesson-quiz-btn" class="w-full sm:w-auto px-6 py-3 rounded-2xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 flex items-center justify-center gap-2 cursor-pointer">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span>Enviar y Calificar Evaluación</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      container.innerHTML = html;
+      if (window.lucide) window.lucide.createIcons();
+
+      // Bind submit
+      document.getElementById('submit-lesson-quiz-btn')?.addEventListener('click', () => {
+        this.submitLessonQuiz(quiz, lesson);
+      });
+    } catch (err) {
+      container.innerHTML = `<div class="p-6 text-center text-xs text-rose-600 bg-rose-50 rounded-2xl">${err.message}</div>`;
+    }
+  },
+
+  async submitLessonQuiz(quiz, lesson) {
+    const answers = {};
+    let missing = false;
+
+    quiz.questions.forEach((q, idx) => {
+      const selected = document.querySelector(`input[name="lesson-quiz-q-${idx}"]:checked`);
+      if (!selected) {
+        missing = true;
+      } else {
+        answers[idx.toString()] = selected.value;
+      }
+    });
+
+    if (missing) {
+      Toast.warning('Por favor responde todas las preguntas antes de enviar la evaluación.');
+      return;
+    }
+
+    Loading.show('Calificando evaluación interactiva con IA...');
+    try {
+      const res = await fetch(`/api/quizzes/${quiz.id}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          courseId: this.selectedCourse.id,
+          lessonId: lesson.id,
+          answers,
+        }),
+      });
+      const data = await res.json();
+      Loading.hide();
+
+      if (!res.ok) throw new Error(data.error);
+
+      // Render results feedback on cards
+      if (data.feedback) {
+        data.feedback.forEach(item => {
+          const card = document.querySelector(`.quiz-q-card[data-q-idx="${item.index}"]`);
+          const feedbackDiv = document.getElementById(`quiz-feedback-${item.index}`);
+          if (!card || !feedbackDiv) return;
+
+          feedbackDiv.classList.remove('hidden');
+          if (item.isCorrect) {
+            card.classList.remove('border-slate-200', 'border-rose-300');
+            card.classList.add('border-emerald-300', 'bg-emerald-50/20');
+            feedbackDiv.innerHTML = `<span class="text-emerald-700 flex items-center gap-1.5"><i data-lucide="check" class="w-3.5 h-3.5"></i> ¡Respuesta Correcta!</span>`;
+          } else {
+            card.classList.remove('border-slate-200', 'border-emerald-300');
+            card.classList.add('border-rose-300', 'bg-rose-50/20');
+            feedbackDiv.innerHTML = `<span class="text-rose-700 flex items-center gap-1.5"><i data-lucide="x" class="w-3.5 h-3.5"></i> Incorrecto. Respuesta correcta: <strong>${item.correctAnswer}</strong></span>`;
+          }
+        });
+      }
+
+      if (window.lucide) window.lucide.createIcons();
+
+      if (data.passed) {
+        Toast.success(`¡Felicitaciones! Aprobaste con ${Math.round(data.score)}% (${data.correct}/${data.total})`);
+        if (!this.completedLessons.includes(lesson.id)) {
+          this.completedLessons.push(lesson.id);
+        }
+
+        // Update pill
+        const pill = document.getElementById('lesson-quiz-status-pill');
+        if (pill) {
+          pill.innerHTML = `
+            <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 shadow-2xs">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5 text-emerald-600"></i> Aprobado (${Math.round(data.score)}%)
+            </span>
+          `;
+        }
+
+        // Refresh enrollment and course status
+        await this.fetchEnrollmentsAndStats();
+        if (this.selectedCourse) {
+          await this.openCourse(this.selectedCourse.id);
+          this.selectLessonById(lesson.id);
+        }
+      } else {
+        Toast.warning(`Calificación: ${Math.round(data.score)}%. Se requiere mínimo 70% para aprobar. Puedes revisar y reintentar.`);
+      }
+    } catch (err) {
+      Loading.hide();
+      Toast.error('Error al calificar: ' + err.message);
+    }
+  },
+
+  openTutorModal() {
+    if (!this.selectedCourse) return;
+    const course = this.selectedCourse;
+    const lesson = this.selectedLesson;
+
+    Modal.show({
+      title: '🤖 Tutor Pedagógico IA',
+      confirmText: 'Cerrar',
+      showCancel: false,
+      content: `
+        <div class="space-y-4 text-left text-xs">
+          <div class="p-3 bg-purple-50 rounded-2xl border border-purple-200 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Contexto Académico</span>
+              <p class="font-bold text-slate-800 text-xs">${course.title}</p>
+              ${lesson ? `<p class="text-[11px] text-purple-600">Lección: ${lesson.title}</p>` : ''}
+            </div>
+            <a href="https://wa.me/?text=${encodeURIComponent('Hola DxSTech Edu, tengo una consulta sobre el curso ' + course.title + (lesson ? ' - Lección: ' + lesson.title : '') + ': ')}" target="_blank" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 transition-colors shrink-0 shadow-xs" title="Continuar en WhatsApp">
+              <i data-lucide="phone" class="w-3.5 h-3.5"></i>
+              <span class="hidden sm:inline">WhatsApp</span>
+            </a>
+          </div>
+
+          <!-- Chat History -->
+          <div id="tutor-chat-box" class="h-64 overflow-y-auto space-y-3 p-3 bg-slate-50 rounded-2xl border border-slate-200/80">
+            <div class="flex items-start gap-2.5">
+              <div class="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-xs">
+                AI
+              </div>
+              <div class="bg-white p-3 rounded-2xl border border-slate-200 text-slate-700 leading-relaxed shadow-2xs">
+                <p class="font-semibold text-purple-900 mb-0.5">¡Hola! Soy tu Tutor IA de DxSTech Edu.</p>
+                <p>Estoy aquí para explicarte conceptos de este curso, darte ejemplos claros o resolver tus dudas antes de presentar las evaluaciones. ¿En qué puedo orientarte hoy?</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Suggestions -->
+          <div class="flex flex-wrap gap-1.5 pt-1">
+            <button type="button" class="tutor-prompt-chip text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-purple-100 hover:text-purple-700 text-slate-600 transition-colors font-medium cursor-pointer">
+              💡 Explícame con un ejemplo sencillo
+            </button>
+            <button type="button" class="tutor-prompt-chip text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-purple-100 hover:text-purple-700 text-slate-600 transition-colors font-medium cursor-pointer">
+              📌 ¿Cuáles son los puntos clave?
+            </button>
+            <button type="button" class="tutor-prompt-chip text-[11px] px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-purple-100 hover:text-purple-700 text-slate-600 transition-colors font-medium cursor-pointer">
+              🎯 Dame un ejercicio práctico
+            </button>
+          </div>
+
+          <!-- Prompt input -->
+          <div class="flex gap-2 pt-1">
+            <input type="text" id="tutor-user-input" placeholder="Escribe tu consulta o duda académica..." class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500">
+            <button id="tutor-send-btn" class="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors shrink-0">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>Preguntar</span>
+            </button>
+          </div>
+        </div>
+      `,
+      onConfirm: () => {}
+    });
+
+    setTimeout(() => {
+      if (window.lucide) window.lucide.createIcons();
+
+      const input = document.getElementById('tutor-user-input');
+      const sendBtn = document.getElementById('tutor-send-btn');
+      const chatBox = document.getElementById('tutor-chat-box');
+
+      const handleSend = async (questionText) => {
+        const q = questionText || input.value.trim();
+        if (!q) return;
+
+        // Render user question
+        chatBox.insertAdjacentHTML('beforeend', `
+          <div class="flex items-start justify-end gap-2.5">
+            <div class="bg-purple-600 text-white p-3 rounded-2xl leading-relaxed text-left max-w-[85%] shadow-2xs">
+              <p>${q.replace(/\n/g, '<br>')}</p>
+            </div>
+          </div>
+        `);
+        input.value = '';
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        // Thinking indicator
+        const typingId = 'tutor-typing-' + Date.now();
+        chatBox.insertAdjacentHTML('beforeend', `
+          <div id="${typingId}" class="flex items-start gap-2.5">
+            <div class="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-xs">
+              AI
+            </div>
+            <div class="bg-white p-3 rounded-2xl border border-purple-200 text-purple-700 italic flex items-center gap-2">
+              <div class="w-2 h-2 rounded-full bg-purple-600 animate-ping"></div>
+              <span>El Tutor IA está analizando el material temático...</span>
+            </div>
+          </div>
+        `);
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        try {
+          const res = await fetch('/api/whatsapp/ask-tutor', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              courseId: course.id,
+              lessonId: lesson?.id || '',
+              question: q,
+            }),
+          });
+          const data = await res.json();
+          document.getElementById(typingId)?.remove();
+
+          const answerText = data.answer || 'Disculpa, no pude procesar la respuesta en este momento.';
+          chatBox.insertAdjacentHTML('beforeend', `
+            <div class="flex items-start gap-2.5">
+              <div class="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center shrink-0 font-bold text-xs">
+                AI
+              </div>
+              <div class="bg-white p-3.5 rounded-2xl border border-slate-200 text-slate-800 leading-relaxed shadow-2xs max-w-[90%] space-y-1">
+                ${answerText.replace(/\n/g, '<br>')}
+              </div>
+            </div>
+          `);
+        } catch (err) {
+          document.getElementById(typingId)?.remove();
+          chatBox.insertAdjacentHTML('beforeend', `
+            <div class="text-rose-500 text-xs py-1 text-center">${err.message}</div>
+          `);
+        }
+        chatBox.scrollTop = chatBox.scrollHeight;
+      };
+
+      sendBtn?.addEventListener('click', () => handleSend());
+      input?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleSend();
+      });
+
+      document.querySelectorAll('.tutor-prompt-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          handleSend(chip.textContent.replace(/^[^\wáéíóúÁÉÍÓÚ¿?]+/, '').trim());
+        });
+      });
+    }, 50);
+  },
+
+  async openDiscussionsModal() {
+    if (!this.selectedCourse) return;
+    const course = this.selectedCourse;
+    const lesson = this.selectedLesson;
+
+    Loading.show('Cargando foro de dudas...');
+    let discussions = [];
+    try {
+      const res = await fetch(`/api/courses/${course.id}/discussions`);
+      if (res.ok) discussions = await res.json();
+    } catch {
+      // Ignorar error inicial
+    }
+    Loading.hide();
+
+    Modal.show({
+      title: `💬 Foro de Dudas: ${course.title}`,
+      confirmText: 'Cerrar',
+      showCancel: false,
+      content: `
+        <div class="space-y-4 text-left text-xs max-h-[75vh] flex flex-col">
+          <!-- New question box -->
+          <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5 shrink-0">
+            <p class="font-bold text-slate-800 flex items-center gap-1.5">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-indigo-600"></i> Publicar una Pregunta o Aporte
+            </p>
+            <input type="text" id="disc-new-title" placeholder="Título resumido de tu duda..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs bg-white">
+            <textarea id="disc-new-message" rows="2" placeholder="Explica detalladamente tu inquietud para que tutores y compañeros puedan responderte..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs bg-white"></textarea>
+            
+            <div class="flex items-center justify-between pt-1">
+              <label class="flex items-center gap-1.5 text-slate-600 cursor-pointer">
+                <input type="checkbox" id="disc-link-lesson" ${lesson ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-indigo-600">
+                <span class="text-[11px]">${lesson ? `Asociar a "${lesson.title}"` : 'Consulta general del curso'}</span>
+              </label>
+              <button id="disc-post-btn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                <span>Publicar</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Discussions feed -->
+          <div id="disc-items-container" class="overflow-y-auto space-y-3 flex-1 pr-1">
+            ${(!discussions || discussions.length === 0) ? `
+              <div class="py-10 text-center text-slate-400">
+                <i data-lucide="message-square-dashed" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
+                <p class="font-semibold text-slate-700">Aún no hay preguntas en este foro.</p>
+                <p class="text-[11px] text-slate-400 mt-0.5">Sé el primero en iniciar una conversación pedagógica.</p>
+              </div>
+            ` : discussions.map(d => `
+              <div class="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-xl bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-[11px]">
+                      ${(d.userName || 'U').charAt(0)}
+                    </div>
+                    <div>
+                      <span class="font-bold text-slate-800">${d.userName}</span>
+                      <span class="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-semibold ml-1">${d.userRole}</span>
+                    </div>
+                  </div>
+                  <span class="text-[10px] text-slate-400">${new Date(d.createdAt).toLocaleDateString()}</span>
+                </div>
+
+                <div>
+                  <h5 class="font-bold text-slate-900 text-xs">${d.title}</h5>
+                  <p class="text-slate-600 text-xs mt-1 leading-relaxed">${d.message.replace(/\n/g, '<br>')}</p>
+                </div>
+
+                <!-- Nested replies -->
+                ${(d.replies && d.replies.length > 0) ? `
+                  <div class="mt-2 pl-4 border-l-2 border-indigo-200 space-y-2 pt-1">
+                    ${d.replies.map(r => `
+                      <div class="p-2 bg-slate-50 rounded-xl border border-slate-200/60 text-xs">
+                        <div class="flex items-center justify-between mb-1">
+                          <span class="font-bold text-slate-800">${r.userName} <span class="text-[10px] text-indigo-600">(${r.userRole})</span></span>
+                          <span class="text-[10px] text-slate-400">${new Date(r.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p class="text-slate-600">${r.message.replace(/\n/g, '<br>')}</p>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+
+                <!-- Reply trigger -->
+                <div class="pt-1 flex justify-end">
+                  <button data-reply-to="${d.id}" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors flex items-center gap-1 cursor-pointer">
+                    <i data-lucide="corner-down-right" class="w-3 h-3"></i> Responder
+                  </button>
+                </div>
+
+                <div id="reply-form-${d.id}" class="hidden pt-2 border-t border-slate-100 space-y-2">
+                  <input type="text" id="reply-input-${d.id}" placeholder="Escribe tu respuesta..." class="w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs bg-slate-50">
+                  <div class="flex justify-end gap-1.5">
+                    <button data-send-reply="${d.id}" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold text-[11px] cursor-pointer">Enviar Respuesta</button>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `,
+      onConfirm: () => {}
+    });
+
+    setTimeout(() => {
+      if (window.lucide) window.lucide.createIcons();
+
+      // Bind post
+      document.getElementById('disc-post-btn')?.addEventListener('click', async () => {
+        const title = document.getElementById('disc-new-title').value.trim();
+        const message = document.getElementById('disc-new-message').value.trim();
+        const linkLesson = document.getElementById('disc-link-lesson').checked;
+
+        if (!title || !message) {
+          Toast.warning('Completa el título y mensaje de la duda');
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/courses/${course.id}/discussions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title,
+              message,
+              lessonId: linkLesson && lesson ? lesson.id : '',
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+
+          Toast.success('¡Pregunta publicada en el foro!');
+          Modal.close();
+          this.openDiscussionsModal();
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      });
+
+      // Bind reply toggle
+      document.querySelectorAll('[data-reply-to]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.dataset.replyTo;
+          document.getElementById(`reply-form-${id}`)?.classList.toggle('hidden');
+        });
+      });
+
+      // Bind send reply
+      document.querySelectorAll('[data-send-reply]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const parentId = btn.dataset.sendReply;
+          const input = document.getElementById(`reply-input-${parentId}`);
+          const message = input?.value.trim();
+          if (!message) return;
+
+          try {
+            const res = await fetch(`/api/courses/${course.id}/discussions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                parentId,
+                title: 'Respuesta',
+                message,
+              }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+
+            Toast.success('Respuesta publicada con éxito');
+            Modal.close();
+            this.openDiscussionsModal();
+          } catch (err) {
+            Toast.error(err.message);
+          }
+        });
+      });
+    }, 50);
+  },
+
+  async openReviewsModal() {
+    if (!this.selectedCourse) return;
+    const course = this.selectedCourse;
+    const user = window.router?.currentUser;
+
+    Loading.show('Consultando calificaciones...');
+    let summary = { reviews: [], averageRating: 5.0, totalReviews: 0, ratingBreakdown: {} };
+    try {
+      const res = await fetch(`/api/courses/${course.id}/reviews`);
+      if (res.ok) summary = await res.json();
+    } catch {
+      // Ignorar error inicial
+    }
+    Loading.hide();
+
+    let selectedRating = 5;
+
+    Modal.show({
+      title: `⭐ Opiniones: ${course.title}`,
+      confirmText: 'Cerrar',
+      showCancel: false,
+      content: `
+        <div class="space-y-4 text-left text-xs max-h-[75vh] flex flex-col">
+          <!-- Summary Header Ribbon -->
+          <div class="p-4 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 rounded-2xl border border-amber-200/80 flex items-center justify-between gap-4 shrink-0">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-2xl bg-amber-500 text-white font-black text-lg flex items-center justify-center shadow-md shadow-amber-200">
+                ${(summary.averageRating || 5.0).toFixed(1)}
+              </div>
+              <div>
+                <div class="flex text-amber-500 text-sm">
+                  ★★★★★
+                </div>
+                <p class="text-xs font-bold text-slate-800 mt-0.5">${summary.totalReviews} opiniones de estudiantes</p>
+              </div>
+            </div>
+            <span class="text-[11px] font-semibold text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200">
+              DxSTech Verified
+            </span>
+          </div>
+
+          <!-- Submit Review Box if user is logged in -->
+          ${user ? `
+            <div class="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5 shrink-0">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800">Califica este curso</span>
+                <div id="star-selector" class="flex gap-1 text-slate-300 text-lg cursor-pointer">
+                  <span data-star="1" class="text-amber-400 hover:scale-110 transition-transform">★</span>
+                  <span data-star="2" class="text-amber-400 hover:scale-110 transition-transform">★</span>
+                  <span data-star="3" class="text-amber-400 hover:scale-110 transition-transform">★</span>
+                  <span data-star="4" class="text-amber-400 hover:scale-110 transition-transform">★</span>
+                  <span data-star="5" class="text-amber-400 hover:scale-110 transition-transform">★</span>
+                </div>
+              </div>
+              <textarea id="review-comment-input" rows="2" placeholder="Escribe tu opinión sobre el docente, el material y las evaluaciones..." class="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs bg-white"></textarea>
+              <div class="flex justify-end">
+                <button id="submit-review-btn" class="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer shadow-xs">
+                  <i data-lucide="star" class="w-3.5 h-3.5"></i>
+                  <span>Publicar Opinión</span>
+                </button>
+              </div>
+            </div>
+          ` : `
+            <p class="text-slate-400 text-center py-2 italic text-[11px]">Inicia sesión para dejar una reseña en este curso.</p>
+          `}
+
+          <!-- Reviews List -->
+          <div class="overflow-y-auto space-y-3 flex-1 pr-1">
+            ${(!summary.reviews || summary.reviews.length === 0) ? `
+              <p class="py-8 text-center text-slate-400 italic">No hay opiniones publicadas aún. ¡Sé el primero en calificar!</p>
+            ` : summary.reviews.map(r => `
+              <div class="p-3 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 font-bold flex items-center justify-center text-[10px]">
+                      ${(r.userName || 'U').charAt(0)}
+                    </div>
+                    <span class="font-bold text-slate-800">${r.userName}</span>
+                  </div>
+                  <div class="flex text-amber-500 text-xs">
+                    ${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}
+                  </div>
+                </div>
+                ${r.comment ? `<p class="text-slate-600 text-xs leading-relaxed pl-8">${r.comment.replace(/\n/g, '<br>')}</p>` : ''}
+                <div class="text-[10px] text-slate-400 text-right">
+                  ${new Date(r.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `,
+      onConfirm: () => {}
+    });
+
+    setTimeout(() => {
+      if (window.lucide) window.lucide.createIcons();
+
+      // Star selection
+      const starSpans = document.querySelectorAll('#star-selector span');
+      starSpans.forEach(s => {
+        s.addEventListener('click', () => {
+          selectedRating = parseInt(s.dataset.star, 10);
+          starSpans.forEach(st => {
+            const val = parseInt(st.dataset.star, 10);
+            if (val <= selectedRating) {
+              st.className = 'text-amber-400 hover:scale-110 transition-transform';
+            } else {
+              st.className = 'text-slate-300 hover:scale-110 transition-transform';
+            }
+          });
+        });
+      });
+
+      // Submit review
+      document.getElementById('submit-review-btn')?.addEventListener('click', async () => {
+        const comment = document.getElementById('review-comment-input')?.value.trim() || '';
+
+        try {
+          const res = await fetch(`/api/courses/${course.id}/reviews`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rating: selectedRating,
+              comment,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+
+          Toast.success('¡Gracias por tu opinión! Reseña registrada.');
+          Modal.close();
+          this.openReviewsModal();
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      });
+    }, 50);
   },
 
   async deleteCourse(courseId) {

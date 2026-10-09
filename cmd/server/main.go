@@ -26,6 +26,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+type quizEnrollmentCompleter struct {
+	enrollSvc *enrollments.Service
+}
+
+func (q *quizEnrollmentCompleter) CompleteLesson(ctx context.Context, userID, courseID, lessonID string) error {
+	_, err := q.enrollSvc.ToggleLessonProgress(ctx, userID, courseID, lessonID, true)
+	return err
+}
+
 func main() {
 	cfg := config.Load()
 
@@ -53,7 +62,8 @@ func main() {
 	certService := certificates.NewService(db)
 	enrollService := enrollments.NewService(db, certService)
 	enrollHandler := enrollments.NewHandler(enrollService)
-	quizService := quizzes.NewService(db, geminiClient)
+	quizCompleter := &quizEnrollmentCompleter{enrollSvc: enrollService}
+	quizService := quizzes.NewService(db, geminiClient, quizCompleter)
 	waService := whatsapp.NewService(db, geminiClient, cfg)
 	analyticsService := analytics.NewService(db)
 	analyticsHandler := analytics.NewHandler(analyticsService)

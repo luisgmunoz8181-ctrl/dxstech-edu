@@ -48,9 +48,10 @@ type Lesson struct {
 	CourseID        string    `json:"courseId"`
 	Title           string    `json:"title"`
 	Description     string    `json:"description"`
-	ContentType     string    `json:"contentType"` // 'pdf', 'pptx', 'mp4', 'youtube', 'text'
+	ContentType     string    `json:"contentType"` // 'pdf', 'pptx', 'mp4', 'youtube', 'text', 'quiz'
 	ContentURL      string    `json:"contentUrl"`
 	ContentBody     string    `json:"contentBody"`
+	QuizID          string    `json:"quizId,omitempty"`
 	DurationMinutes int       `json:"durationMinutes"`
 	OrderIndex      int       `json:"orderIndex"`
 	IsFreePreview   bool      `json:"isFreePreview"`
@@ -109,6 +110,7 @@ type CreateLessonRequest struct {
 	ContentType     string `json:"contentType" binding:"required"`
 	ContentURL      string `json:"contentUrl"`
 	ContentBody     string `json:"contentBody"`
+	QuizID          string `json:"quizId"`
 	DurationMinutes int    `json:"durationMinutes"`
 	OrderIndex      int    `json:"orderIndex"`
 	IsFreePreview   bool   `json:"isFreePreview"`
@@ -120,9 +122,47 @@ type UpdateLessonRequest struct {
 	ContentType     string `json:"contentType" binding:"required"`
 	ContentURL      string `json:"contentUrl"`
 	ContentBody     string `json:"contentBody"`
+	QuizID          string `json:"quizId"`
 	DurationMinutes int    `json:"durationMinutes"`
 	OrderIndex      int    `json:"orderIndex"`
 	IsFreePreview   bool   `json:"isFreePreview"`
+}
+
+type CourseDiscussion struct {
+	ID        string    `json:"id"`
+	CourseID  string    `json:"courseId"`
+	LessonID  string    `json:"lessonId,omitempty"`
+	UserID    string    `json:"userId"`
+	UserName  string    `json:"userName"`
+	UserRole  string    `json:"userRole"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type CreateDiscussionRequest struct {
+	LessonID string `json:"lessonId"`
+	Message  string `json:"message" binding:"required"`
+}
+
+type CourseReview struct {
+	ID        string    `json:"id"`
+	CourseID  string    `json:"courseId"`
+	UserID    string    `json:"userId"`
+	UserName  string    `json:"userName"`
+	Rating    int       `json:"rating" binding:"required"`
+	Comment   string    `json:"comment"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type CreateReviewRequest struct {
+	Rating  int    `json:"rating" binding:"required"`
+	Comment string `json:"comment"`
+}
+
+type CourseReviewsSummary struct {
+	AverageRating float64        `json:"averageRating"`
+	TotalReviews  int            `json:"totalReviews"`
+	Reviews       []CourseReview `json:"reviews"`
 }
 
 var nonSlugRegex = regexp.MustCompile(`[^a-z0-9]+`)
@@ -145,9 +185,9 @@ func GenerateSlug(title string) string {
 
 func ValidateContentType(ct string) error {
 	switch ct {
-	case "pdf", "pptx", "mp4", "youtube", "text":
+	case "pdf", "pptx", "mp4", "youtube", "text", "quiz":
 		return nil
 	default:
-		return errors.New("tipo de contenido inválido: debe ser 'pdf', 'pptx', 'mp4', 'youtube' o 'text'")
+		return errors.New("tipo de contenido inválido: debe ser 'pdf', 'pptx', 'mp4', 'youtube', 'text' o 'quiz'")
 	}
 }

@@ -83,7 +83,13 @@ export const WhatsAppView = {
             <div class="space-y-1.5">
               <div class="flex items-center justify-between">
                 <label class="block text-xs font-semibold text-slate-700">Base de Conocimiento Institucional</label>
-                <button id="reset-kb-btn" class="text-[11px] text-emerald-600 hover:underline font-medium">Restablecer datos base</button>
+                <div class="flex items-center gap-3">
+                  <button id="sync-courses-kb-btn" class="text-[11px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span>Sincronizar Cursos</span>
+                  </button>
+                  <button id="reset-kb-btn" class="text-[11px] text-emerald-600 hover:underline font-medium">Restablecer datos base</button>
+                </div>
               </div>
               <textarea id="knowledge-base-input" rows="7" placeholder="Escribe aquí toda la información oficial de la institución:&#10;- Horarios de atención: Lunes a Viernes de 8:00 AM a 6:00 PM&#10;- Cursos disponibles: Desarrollo Web, IA Aplicada, Certificaciones Cloud&#10;- Métodos de pago y políticas de reembolso...&#10;- Contacto de admisiones..." class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-sans leading-relaxed resize-none"></textarea>
             </div>
@@ -322,6 +328,30 @@ Metodología: 100% online con clases prácticas en vivo, tutoría personalizada 
 Certificados: Al aprobar con 60% o más, se emite un certificado digital en PDF verificable con código único.`;
       Toast.info('Base de conocimiento restablecida con datos institucionales completos.');
     });
+
+    // Sync Courses from LMS
+    const syncBtn = document.getElementById('sync-courses-kb-btn');
+    if (syncBtn) {
+      syncBtn.addEventListener('click', async () => {
+        try {
+          syncBtn.disabled = true;
+          syncBtn.innerHTML = `<span>Sincronizando...</span>`;
+          const res = await fetch('/api/whatsapp/sync-courses', { method: 'POST' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Error al sincronizar cursos');
+          if (data.knowledgeBase) {
+            document.getElementById('knowledge-base-input').value = data.knowledgeBase;
+          }
+          Toast.success(data.message || 'Cursos sincronizados correctamente a WhatsApp');
+        } catch (err) {
+          Toast.error(err.message);
+        } finally {
+          syncBtn.disabled = false;
+          syncBtn.innerHTML = `<i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>Sincronizar Cursos</span>`;
+          if (window.lucide) window.lucide.createIcons();
+        }
+      });
+    }
 
     // Save Bot Config
     document.getElementById('save-wa-config-btn').addEventListener('click', () => {

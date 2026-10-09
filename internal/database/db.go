@@ -224,6 +224,53 @@ func runMigrations(db *sql.DB) error {
 	_, _ = db.Exec("ALTER TABLE issued_certificates ADD COLUMN instructor_name TEXT DEFAULT 'DxSTech Edu';")
 	_, _ = db.Exec("CREATE INDEX IF NOT EXISTS idx_cert_user_course ON issued_certificates(user_id, course_id);")
 
+	// Migración incremental segura para Fase 6: Quizzes vinculados, entregas, foros y valoraciones
+	_, _ = db.Exec("ALTER TABLE lessons ADD COLUMN quiz_id TEXT DEFAULT '';")
+	_, _ = db.Exec("ALTER TABLE quizzes ADD COLUMN course_id TEXT DEFAULT '';")
+	_, _ = db.Exec("ALTER TABLE quizzes ADD COLUMN lesson_id TEXT DEFAULT '';")
+
+	phase6Schema := `
+	CREATE TABLE IF NOT EXISTS quiz_submissions (
+		id TEXT PRIMARY KEY,
+		quiz_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		course_id TEXT NOT NULL DEFAULT '',
+		lesson_id TEXT NOT NULL DEFAULT '',
+		score REAL NOT NULL,
+		passed INTEGER NOT NULL DEFAULT 0,
+		answers_json TEXT NOT NULL DEFAULT '',
+		submitted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS course_discussions (
+		id TEXT PRIMARY KEY,
+		course_id TEXT NOT NULL,
+		lesson_id TEXT NOT NULL DEFAULT '',
+		user_id TEXT NOT NULL,
+		user_name TEXT NOT NULL,
+		user_role TEXT NOT NULL DEFAULT 'ESTUDIANTE',
+		message TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+
+	CREATE TABLE IF NOT EXISTS course_reviews (
+		id TEXT PRIMARY KEY,
+		course_id TEXT NOT NULL,
+		user_id TEXT NOT NULL,
+		user_name TEXT NOT NULL,
+		rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+		comment TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		UNIQUE(course_id, user_id)
+	);
+	`
+	_, _ = db.Exec(phase6Schema)
+
 	if err := seedDefaultUsers(db); err != nil {
 		return err
 	}

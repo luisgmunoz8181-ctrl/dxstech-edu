@@ -75,13 +75,21 @@ func NewService(db *database.DB, gemini *ai.GeminiClient, cfg *config.Config) *S
 }
 
 func (s *Service) RegisterRoutes(r *gin.RouterGroup) {
-	r.Use(s.productionAuthMiddleware())
-	r.GET("/status", s.GetStatus)
-	r.POST("/config", s.UpdateConfig)
-	r.POST("/send", s.SendBulkMessages)
-	r.POST("/simulate-chat", s.SimulateChat)
-	r.GET("/logs", s.GetLogs)
-	r.DELETE("/logs", s.ClearLogs)
+	// Public / Student AI Tutor endpoint
+	r.POST("/ask-tutor", s.AskTutor)
+
+	// Admin protected endpoints
+	admin := r.Group("")
+	admin.Use(s.productionAuthMiddleware())
+	{
+		admin.GET("/status", s.GetStatus)
+		admin.POST("/config", s.UpdateConfig)
+		admin.POST("/sync-courses", s.SyncCourses)
+		admin.POST("/send", s.SendBulkMessages)
+		admin.POST("/simulate-chat", s.SimulateChat)
+		admin.GET("/logs", s.GetLogs)
+		admin.DELETE("/logs", s.ClearLogs)
+	}
 }
 
 func (s *Service) productionAuthMiddleware() gin.HandlerFunc {
@@ -90,6 +98,14 @@ func (s *Service) productionAuthMiddleware() gin.HandlerFunc {
 		if s.cfg == nil || s.cfg.IsDevelopment() {
 			c.Next()
 			return
+		}
+
+		// Allow authenticated admins via JWT HttpOnly cookie or header
+		if role, exists := c.Get("userRole"); exists {
+			if roleStr, ok := role.(string); ok && (roleStr == "SUPERADMIN" || roleStr == "ADMINISTRADOR") {
+				c.Next()
+				return
+			}
 		}
 
 		// IN PRODUCTION: require admin authorization
@@ -103,7 +119,7 @@ func (s *Service) productionAuthMiddleware() gin.HandlerFunc {
 
 		c.Header("WWW-Authenticate", `Basic realm="DxSTech Edu WhatsApp Admin"`)
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-			"error": "Acceso protegido en producción. Ingrese credenciales de administrador para WhatsApp.",
+			"error": "Acceso protegido en producción. Ingrese con usuario administrador o proporcione credenciales de WhatsApp.",
 		})
 	}
 }
@@ -337,5 +353,121 @@ func (s *Service) ClearLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Bitácora vaciada correctamente"})
+}
+
+// SyncCourses extracts syllabus info from published courses and updates the bot knowledge base
+func (s *Service) SyncCourses(c *gin.Context) {
+	rows, err := s.db.QueryContext(c.Request.Context(), `
+		SELECT c.title, c.code, c.description, c.learning_objectives, c.duration_hours,
+		       (SELECT COUNT(*) FROM lessons l WHERE l.course_id = c.id) as lessons_count
+		FROM courses c
+		WHERE c.status = 'published'
+		ORDER BY c.created_at DESC
+	`)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error consultando cursos: " + err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var sb strings.Builder
+	sb.WriteString("🎓 DxSTech Edu — Plataforma y Academia de Inteligencia Artificial & Tecnología.\n\n")
+	sb.WriteString("Información Oficial y Preguntas Frecuentes:\n")
+	sb.WriteString("- DxSTech Edu ofrece cursos de especialización profesional con certificación oficial verificable por código QR.\n")
+	sb.WriteString("- Los cursos incluyen lecciones interactivas, visores de videos, PDFs, diapositivas y evaluaciones automatizadas con IA.\n\n")
+	sb.WriteString("CATÁLOGO OFICIAL DE CURSOS PUBLICADOS:\n")
+
+	count := 0
+	for rows.Next() {
+		var title, code, desc, obj string
+		var hours float64
+		var lessonsCount int
+		if err := rows.Scan(&title, &code, &desc, &obj, &hours, &lessonsCount); err == nil {
+			count++
+			sb.WriteString(fmt.Sprintf("\n%d. %s (Código: %s)\n", count, title, code))
+			sb.WriteString(fmt.Sprintf("   • Duración: %.1f horas lectivas | %d lecciones\n", hours, lessonsCount))
+			if strings.TrimSpace(desc) != "" {
+				sb.WriteString(fmt.Sprintf("   • Descripción: %s\n", desc))
+			}
+			if strings.TrimSpace(obj) != "" {
+				sb.WriteString(fmt.Sprintf("   • Objetivos: %s\n", obj))
+			}
+		}
+	}
+
+	newKB := sb.String()
+	_, err = s.db.ExecContext(c.Request.Context(), `
+		UPDATE whatsapp_config
+		SET knowledge_base = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = 1
+	`, newKB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error actualizando la base de conocimiento de WhatsApp"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":       fmt.Sprintf("Se sincronizaron exitosamente %d cursos a la Base de Conocimiento de WhatsApp", count),
+		"syncedCourses": count,
+		"knowledgeBase": newKB,
+	})
+}
+
+type AskTutorRequest struct {
+	CourseID string `json:"courseId"`
+	LessonID string `json:"lessonId"`
+	Question string `json:"question" binding:"required"`
+	APIKey   string `json:"apiKey"`
+}
+
+func (s *Service) AskTutor(c *gin.Context) {
+	var req AskTutorRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "La consulta del estudiante es requerida"})
+		return
+	}
+
+	apiKey := req.APIKey
+	if strings.TrimSpace(apiKey) == "" {
+		apiKey = c.GetHeader("X-Gemini-API-Key")
+	}
+
+	// Build course context
+	contextInfo := "DxSTech Edu - Formación en Tecnología e Inteligencia Artificial."
+	if req.CourseID != "" {
+		var title, desc, obj string
+		_ = s.db.QueryRowContext(c.Request.Context(), "SELECT title, description, learning_objectives FROM courses WHERE id = ?", req.CourseID).Scan(&title, &desc, &obj)
+		if title != "" {
+			contextInfo = fmt.Sprintf("Curso: %s.\nDescripción: %s.\nObjetivos de aprendizaje: %s.", title, desc, obj)
+		}
+	}
+	if req.LessonID != "" {
+		var lTitle, lDesc string
+		_ = s.db.QueryRowContext(c.Request.Context(), "SELECT title, description FROM lessons WHERE id = ?", req.LessonID).Scan(&lTitle, &lDesc)
+		if lTitle != "" {
+			contextInfo += fmt.Sprintf("\nLección actual: %s. %s", lTitle, lDesc)
+		}
+	}
+
+	if strings.TrimSpace(apiKey) == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"reply":    fmt.Sprintf("💡 Tutor DxSTech: Recibí tu consulta. Para obtener explicaciones profundas con IA en tiempo real, ingresa tu Gemini API Key en Configuración."),
+			"courseId": req.CourseID,
+		})
+		return
+	}
+
+	reply, err := s.gemini.AskChatbot(c.Request.Context(), apiKey, req.Question, contextInfo, false)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"reply": fmt.Sprintf("Lo siento, no pude procesar la consulta con el modelo: %s", err.Error()),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"reply":    reply,
+		"courseId": req.CourseID,
+	})
 }
 

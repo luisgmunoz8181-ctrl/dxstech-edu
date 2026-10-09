@@ -179,7 +179,7 @@ func (s *Service) GetCourse(ctx context.Context, idOrSlug string, role string) (
 	// Fetch Lessons
 	lessonRows, err := s.db.QueryContext(ctx, `
 		SELECT id, module_id, course_id, title, description, content_type,
-		       content_url, content_body, duration_minutes, order_index,
+		       content_url, content_body, coalesce(quiz_id, ''), duration_minutes, order_index,
 		       is_free_preview, created_at, updated_at
 		FROM lessons
 		WHERE course_id = ?
@@ -195,7 +195,7 @@ func (s *Service) GetCourse(ctx context.Context, idOrSlug string, role string) (
 		var isFree int
 		err := lessonRows.Scan(
 			&l.ID, &l.ModuleID, &l.CourseID, &l.Title, &l.Description,
-			&l.ContentType, &l.ContentURL, &l.ContentBody, &l.DurationMinutes,
+			&l.ContentType, &l.ContentURL, &l.ContentBody, &l.QuizID, &l.DurationMinutes,
 			&l.OrderIndex, &isFree, &l.CreatedAt, &l.UpdatedAt,
 		)
 		if err != nil {
@@ -560,12 +560,12 @@ func (s *Service) CreateLesson(ctx context.Context, moduleID string, req CreateL
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO lessons (
 			id, module_id, course_id, title, description, content_type,
-			content_url, content_body, duration_minutes, order_index,
+			content_url, content_body, quiz_id, duration_minutes, order_index,
 			is_free_preview, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		id, moduleID, courseID, req.Title, req.Description, req.ContentType,
-		req.ContentURL, req.ContentBody, duration, orderIndex,
+		req.ContentURL, req.ContentBody, req.QuizID, duration, orderIndex,
 		isFreeInt, now, now,
 	)
 	if err != nil {
@@ -581,6 +581,7 @@ func (s *Service) CreateLesson(ctx context.Context, moduleID string, req CreateL
 		ContentType:     req.ContentType,
 		ContentURL:      req.ContentURL,
 		ContentBody:     req.ContentBody,
+		QuizID:          req.QuizID,
 		DurationMinutes: duration,
 		OrderIndex:      orderIndex,
 		IsFreePreview:   req.IsFreePreview,
@@ -611,12 +612,12 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE lessons SET
 			title = ?, description = ?, content_type = ?, content_url = ?,
-			content_body = ?, duration_minutes = ?, order_index = ?,
+			content_body = ?, quiz_id = ?, duration_minutes = ?, order_index = ?,
 			is_free_preview = ?, updated_at = ?
 		WHERE id = ?
 	`,
 		req.Title, req.Description, req.ContentType, req.ContentURL,
-		req.ContentBody, duration, req.OrderIndex,
+		req.ContentBody, req.QuizID, duration, req.OrderIndex,
 		isFreeInt, now, lessonID,
 	)
 	if err != nil {
@@ -631,12 +632,12 @@ func (s *Service) UpdateLesson(ctx context.Context, lessonID string, req UpdateL
 	var freeFlag int
 	err = s.db.QueryRowContext(ctx, `
 		SELECT id, module_id, course_id, title, description, content_type,
-		       content_url, content_body, duration_minutes, order_index,
+		       content_url, content_body, coalesce(quiz_id, ''), duration_minutes, order_index,
 		       is_free_preview, created_at, updated_at
 		FROM lessons WHERE id = ?
 	`, lessonID).Scan(
 		&l.ID, &l.ModuleID, &l.CourseID, &l.Title, &l.Description,
-		&l.ContentType, &l.ContentURL, &l.ContentBody, &l.DurationMinutes,
+		&l.ContentType, &l.ContentURL, &l.ContentBody, &l.QuizID, &l.DurationMinutes,
 		&l.OrderIndex, &freeFlag, &l.CreatedAt, &l.UpdatedAt,
 	)
 	l.IsFreePreview = freeFlag == 1
@@ -704,4 +705,154 @@ func (s *Service) SaveUpload(fileHeader *multipart.FileHeader) (string, error) {
 	}
 
 	return "/uploads/" + uniqueName, nil
+}
+
+// Course Discussions / Q&A Forum
+
+func (s *Service) GetDiscussions(ctx context.Context, courseID, lessonID string) ([]CourseDiscussion, error) {
+	query := `
+		SELECT id, course_id, coalesce(lesson_id, ''), user_id, user_name, user_role, message, created_at
+		FROM course_discussions
+		WHERE course_id = ?
+	`
+	args := []any{courseID}
+	if strings.TrimSpace(lessonID) != "" {
+		query += " AND (lesson_id = ? OR lesson_id = '')"
+		args = append(args, lessonID)
+	}
+	query += " ORDER BY created_at ASC LIMIT 100"
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("error al consultar foro del curso: %w", err)
+	}
+	defer rows.Close()
+
+	list := make([]CourseDiscussion, 0)
+	for rows.Next() {
+		var d CourseDiscussion
+		if err := rows.Scan(&d.ID, &d.CourseID, &d.LessonID, &d.UserID, &d.UserName, &d.UserRole, &d.Message, &d.CreatedAt); err == nil {
+			list = append(list, d)
+		}
+	}
+	return list, nil
+}
+
+func (s *Service) CreateDiscussion(ctx context.Context, courseID, lessonID, userID, userName, userRole, message string) (*CourseDiscussion, error) {
+	msg := strings.TrimSpace(message)
+	if msg == "" {
+		return nil, errors.New("el mensaje no puede estar vacío")
+	}
+
+	id := fmt.Sprintf("dsc-%d", time.Now().UnixNano())
+	now := time.Now()
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO course_discussions (id, course_id, lesson_id, user_id, user_name, user_role, message, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, id, courseID, lessonID, userID, userName, userRole, msg, now)
+	if err != nil {
+		return nil, fmt.Errorf("error publicando en el foro: %w", err)
+	}
+
+	return &CourseDiscussion{
+		ID:        id,
+		CourseID:  courseID,
+		LessonID:  lessonID,
+		UserID:    userID,
+		UserName:  userName,
+		UserRole:  userRole,
+		Message:   msg,
+		CreatedAt: now,
+	}, nil
+}
+
+// Course Reviews / Ratings
+
+func (s *Service) GetReviews(ctx context.Context, courseID string) (*CourseReviewsSummary, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, course_id, user_id, user_name, rating, comment, created_at
+		FROM course_reviews
+		WHERE course_id = ?
+		ORDER BY created_at DESC
+	`, courseID)
+	if err != nil {
+		return nil, fmt.Errorf("error consultando valoraciones: %w", err)
+	}
+	defer rows.Close()
+
+	reviews := make([]CourseReview, 0)
+	totalScore := 0
+	for rows.Next() {
+		var r CourseReview
+		if err := rows.Scan(&r.ID, &r.CourseID, &r.UserID, &r.UserName, &r.Rating, &r.Comment, &r.CreatedAt); err == nil {
+			reviews = append(reviews, r)
+			totalScore += r.Rating
+		}
+	}
+
+	avg := 0.0
+	if len(reviews) > 0 {
+		avg = float64(totalScore) / float64(len(reviews))
+	}
+
+	return &CourseReviewsSummary{
+		AverageRating: avg,
+		TotalReviews:  len(reviews),
+		Reviews:       reviews,
+	}, nil
+}
+
+func (s *Service) CreateReview(ctx context.Context, courseID, userID, userName string, rating int, comment string) (*CourseReview, error) {
+	if rating < 1 || rating > 5 {
+		return nil, errors.New("la calificación debe ser entre 1 y 5 estrellas")
+	}
+
+	id := fmt.Sprintf("rev-%d", time.Now().UnixNano())
+	now := time.Now()
+
+	_, err := s.db.ExecContext(ctx, `
+		INSERT INTO course_reviews (id, course_id, user_id, user_name, rating, comment, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(course_id, user_id) DO UPDATE SET
+			rating = excluded.rating,
+			comment = excluded.comment,
+			created_at = excluded.created_at
+	`, id, courseID, userID, userName, rating, strings.TrimSpace(comment), now)
+	if err != nil {
+		return nil, fmt.Errorf("error registrando valoración: %w", err)
+	}
+
+	return &CourseReview{
+		ID:        id,
+		CourseID:  courseID,
+		UserID:    userID,
+		UserName:  userName,
+		Rating:    rating,
+		Comment:   strings.TrimSpace(comment),
+		CreatedAt: now,
+	}, nil
+}
+
+// GetCourseSummaryContext builds a syllabus overview of the course for AI Tutor / WhatsApp sync
+func (s *Service) GetCourseSummaryContext(ctx context.Context, courseID string) (string, error) {
+	course, err := s.GetCourse(ctx, courseID, "ADMINISTRADOR")
+	if err != nil {
+		return "", err
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Curso: %s (%s)\n", course.Title, course.Code))
+	sb.WriteString(fmt.Sprintf("Descripción: %s\n", course.Description))
+	sb.WriteString(fmt.Sprintf("Objetivos: %s\n", course.LearningObjectives))
+	sb.WriteString("Temario del curso:\n")
+
+	for _, mod := range course.Modules {
+		sb.WriteString(fmt.Sprintf(" - Módulo %d: %s\n", mod.OrderIndex, mod.Title))
+		for _, lsn := range mod.Lessons {
+			sb.WriteString(fmt.Sprintf("   * Lección: %s [%s]\n", lsn.Title, lsn.ContentType))
+		}
+	}
+
+	return sb.String(), nil
 }

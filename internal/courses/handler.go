@@ -20,6 +20,11 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	// Public / All Authenticated users
 	r.GET("", h.HandleListCourses)
 	r.GET("/:id", h.HandleGetCourse)
+	r.GET("/:id/discussions", h.HandleGetDiscussions)
+	r.POST("/:id/discussions", auth.RequireAuth(), h.HandleCreateDiscussion)
+	r.GET("/:id/reviews", h.HandleGetReviews)
+	r.POST("/:id/reviews", auth.RequireAuth(), h.HandleCreateReview)
+	r.GET("/:id/tutor-context", auth.RequireAuth(), h.HandleGetTutorContext)
 
 	// Admin Only Routes (Superadmin & Administrador)
 	admin := r.Group("")
@@ -260,5 +265,84 @@ func (h *Handler) HandleUpload(c *gin.Context) {
 		"url":      url,
 		"filename": file.Filename,
 		"size":     file.Size,
+	})
+}
+
+// Discussions Handlers
+
+func (h *Handler) HandleGetDiscussions(c *gin.Context) {
+	courseID := c.Param("id")
+	lessonID := c.Query("lessonId")
+
+	list, err := h.svc.GetDiscussions(c.Request.Context(), courseID, lessonID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, list)
+}
+
+func (h *Handler) HandleCreateDiscussion(c *gin.Context) {
+	courseID := c.Param("id")
+	userID := c.GetString("userId")
+	userName := c.GetString("userEmail")
+	userRole := c.GetString("userRole")
+
+	var req CreateDiscussionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "El mensaje es requerido"})
+		return
+	}
+
+	d, err := h.svc.CreateDiscussion(c.Request.Context(), courseID, req.LessonID, userID, userName, userRole, req.Message)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, d)
+}
+
+// Reviews Handlers
+
+func (h *Handler) HandleGetReviews(c *gin.Context) {
+	courseID := c.Param("id")
+
+	summary, err := h.svc.GetReviews(c.Request.Context(), courseID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, summary)
+}
+
+func (h *Handler) HandleCreateReview(c *gin.Context) {
+	courseID := c.Param("id")
+	userID := c.GetString("userId")
+	userName := c.GetString("userEmail")
+
+	var req CreateReviewRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Calificación válida (1 a 5) requerida"})
+		return
+	}
+
+	rev, err := h.svc.CreateReview(c.Request.Context(), courseID, userID, userName, req.Rating, req.Comment)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, rev)
+}
+
+func (h *Handler) HandleGetTutorContext(c *gin.Context) {
+	courseID := c.Param("id")
+	tutorCtx, err := h.svc.GetCourseSummaryContext(c.Request.Context(), courseID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"courseId": courseID,
+		"context":  tutorCtx,
 	})
 }
