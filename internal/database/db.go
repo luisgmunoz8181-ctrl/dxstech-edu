@@ -19,11 +19,57 @@ import (
 // producción es el valor por defecto; los tests lo reducen para ir más rápido.
 var BcryptCost = bcrypt.DefaultCost
 
+// Credenciales de las cuentas de demostración que siembra el modo desarrollo. Son
+// públicas (están en el código y el README): cualquier cuenta que todavía las use en
+// producción debe rotarse con `dxstech-server -rotate-demo-users`.
+const (
+	DemoAdminPassword   = "Admin1234*"
+	DemoStudentPassword = "Student1234*"
+)
+
+// DemoUser describe una cuenta de demostración y la contraseña pública con que se siembra.
+type DemoUser struct {
+	Email    string
+	Password string
+}
+
+// DemoUsers son las cuentas que siembra seedDefaultUsers.
+var DemoUsers = []DemoUser{
+	{"superadmin@dxstech.edu", DemoAdminPassword},
+	{"admin@dxstech.edu", DemoAdminPassword},
+	{"estudiante@dxstech.edu", DemoStudentPassword},
+}
+
 // maxOpenConns es el tamaño del pool de conexiones SQLite (WAL).
 const maxOpenConns = 8
 
 type DB struct {
 	*sql.DB
+}
+
+// OpenExisting abre una base de datos que ya existe en dataDir (sin crearla, sembrar datos ni
+// migrar), para las herramientas de línea de comandos. Falla con un mensaje claro si no existe.
+func OpenExisting(dataDir string) (*DB, error) {
+	dbPath := filepath.Join(dataDir, "dxstech.db")
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil, fmt.Errorf("no se encontró la base de datos en %s (revisa DATA_DIR)", dbPath)
+	}
+	dsn := fmt.Sprintf("%s?_txlock=immediate&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)", dbPath)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	// Una base creada por una versión anterior debe migrarse antes de usarla con esta herramienta.
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migración de la base de datos: %w", err)
+	}
+	return &DB{DB: db}, nil
 }
 
 // InitDB abre la base de datos y aplica las migraciones.
@@ -145,13 +191,13 @@ func seedDefaultUsers(db *sql.DB) error {
 
 	// Hashes de contraseñas de desarrollo para testing inmediato
 	// Admin1234* para Superadmin y Administrador
-	adminHash, err := bcrypt.GenerateFromPassword([]byte("Admin1234*"), BcryptCost)
+	adminHash, err := bcrypt.GenerateFromPassword([]byte(DemoAdminPassword), BcryptCost)
 	if err != nil {
 		return err
 	}
 
 	// Student1234* para Estudiante
-	studentHash, err := bcrypt.GenerateFromPassword([]byte("Student1234*"), BcryptCost)
+	studentHash, err := bcrypt.GenerateFromPassword([]byte(DemoStudentPassword), BcryptCost)
 	if err != nil {
 		return err
 	}

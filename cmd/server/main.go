@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"dxstech-edu/internal/auth"
 	"dxstech-edu/internal/backup"
 	"dxstech-edu/internal/config"
 	"dxstech-edu/internal/database"
@@ -21,7 +23,9 @@ import (
 func main() {
 	devFlag := flag.Bool("dev", false, "ejecuta en modo desarrollo (equivale a APP_ENV=development)")
 	restoreFlag := flag.String("restore", "", "restaura una copia de seguridad (.tar.gz) en DATA_DIR y termina; el servidor debe estar detenido")
-	yesFlag := flag.Bool("yes", false, "confirma la restauración (-restore)")
+	yesFlag := flag.Bool("yes", false, "confirma la operación (-restore o -rotate-demo-users); sin él solo se muestra qué se haría")
+	rotateFlag := flag.Bool("rotate-demo-users", false, "neutraliza las cuentas demo (admin/superadmin/estudiante@dxstech.edu) que aún usan su contraseña pública y termina")
+	deactivateFlag := flag.Bool("demo-deactivate", false, "con -rotate-demo-users: desactiva las cuentas demo en lugar de darles una contraseña nueva")
 	flag.Parse()
 
 	cfg := config.Load()
@@ -33,6 +37,9 @@ func main() {
 	if *restoreFlag != "" {
 		runRestore(cfg, *restoreFlag, *yesFlag)
 		return
+	}
+	if *rotateFlag {
+		os.Exit(runRotateDemoUsers(cfg, *yesFlag, *deactivateFlag, os.Stdout))
 	}
 
 	if err := cfg.EnsureJWTSecret(); err != nil {
@@ -120,4 +127,59 @@ func runRestore(cfg *config.Config, archive string, confirmed bool) {
 		log.Fatalf("❌ No se pudo restaurar la copia: %v", err)
 	}
 	fmt.Println("✅ Copia restaurada. Ya puedes iniciar el servidor.")
+}
+
+// runRotateDemoUsers neutraliza las cuentas de demostración que todavía usan su contraseña
+// pública (modo CLI). Devuelve el código de salida: 0 correcto, 1 error, 2 falta confirmar.
+// Las contraseñas nuevas se escriben SOLO en out (no en los logs) y se muestran una vez.
+func runRotateDemoUsers(cfg *config.Config, confirmed, deactivate bool, out io.Writer) int {
+	db, err := database.OpenExisting(cfg.DataDir)
+	if err != nil {
+		fmt.Fprintf(out, "❌ %v\n", err)
+		return 1
+	}
+	defer db.Close()
+
+	results, err := auth.RotateDemoUsers(context.Background(), db, auth.DemoRotationOptions{Apply: confirmed, Deactivate: deactivate})
+	if err != nil {
+		fmt.Fprintf(out, "❌ No se pudo completar la operación (no se cambió nada): %v\n", err)
+		return 1
+	}
+
+	fmt.Fprintf(out, "Cuentas de demostración en %s:\n\n", cfg.DataDir)
+	pending := 0
+	for _, r := range results {
+		fmt.Fprintf(out, "  • %-26s %s\n", r.Email, r.Outcome)
+		if r.Outcome == auth.DemoWouldRotate || r.Outcome == auth.DemoWouldDeact {
+			pending++
+		}
+	}
+	fmt.Fprintln(out)
+
+	if !confirmed {
+		if pending == 0 {
+			fmt.Fprintln(out, "✅ Nada que hacer: ninguna cuenta demo usa ya su contraseña pública.")
+			return 0
+		}
+		fmt.Fprintln(out, "Simulación: no se cambió nada. Detén el servidor y vuelve a ejecutar agregando -yes para aplicarlo.")
+		return 2
+	}
+
+	rotated := 0
+	for _, r := range results {
+		if r.Outcome != auth.DemoRotated {
+			continue
+		}
+		if rotated == 0 {
+			fmt.Fprintln(out, "🔐 Contraseñas nuevas (se muestran UNA sola vez; guárdalas ahora). Cada cuenta deberá cambiarla al ingresar:")
+			fmt.Fprintln(out)
+		}
+		rotated++
+		fmt.Fprintf(out, "  %-26s %s\n", r.Email, r.Password)
+	}
+	if rotated > 0 {
+		fmt.Fprintln(out)
+	}
+	fmt.Fprintln(out, "✅ Listo. Las sesiones anteriores de estas cuentas quedaron cerradas.")
+	return 0
 }

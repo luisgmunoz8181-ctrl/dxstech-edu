@@ -35,6 +35,7 @@ const (
 	WhatsAppConfig   = "WHATSAPP_CONFIG_UPDATE"
 	WhatsAppSync     = "WHATSAPP_SYNC_COURSES"
 	WhatsAppLogsWipe = "WHATSAPP_LOGS_CLEAR"
+	DemoUsersRotated = "DEMO_USERS_ROTATED"
 	BackupCreate     = "BACKUP_CREATE"
 	BackupDownload   = "BACKUP_DOWNLOAD"
 	ForumDelete      = "FORUM_POST_DELETE"
