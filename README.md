@@ -176,6 +176,27 @@ Configura las siguientes variables en la pestaña **Environment Variables**:
 
 ---
 
+## 🧹 Cuentas de demostración en una base existente
+
+Las bases creadas con versiones anteriores (o en modo `--dev`) pueden conservar las cuentas `superadmin@dxstech.edu`, `admin@dxstech.edu` y `estudiante@dxstech.edu` con sus contraseñas **públicas** (están en este README). Para neutralizarlas:
+
+```bash
+# 1) Simulación: lista qué cuentas se tocarían y no cambia nada (código de salida 2)
+dxstech-server -rotate-demo-users
+# 2) Aplicar: contraseña aleatoria de 20 caracteres por cuenta, impresa UNA sola vez
+dxstech-server -rotate-demo-users -yes
+# Con Docker (el volumen se corrige solo si pertenece a root):
+docker run --rm -v dxstech_data:/app/data dxstech-edu /app/dxstech-server -rotate-demo-users -yes
+```
+
+- Solo toca una cuenta si **todavía usa la contraseña demo**: las que ya cambiaste, las desactivadas y las que no existen se omiten. Es **idempotente**: repetirlo no cambia nada.
+- Cada cuenta rotada queda con **cambio de contraseña obligatorio** en el primer ingreso y con las sesiones anteriores **cerradas**. La operación es atómica y queda auditada (`DEMO_USERS_ROTATED`, sin contraseñas).
+- `-demo-deactivate` desactiva las cuentas en lugar de rotarlas. Una cuenta SUPERADMIN solo se desactiva si queda otro SUPERADMIN activo; si no, se rota para no dejar la plataforma sin administrador.
+- Las contraseñas nuevas salen **solo por la salida estándar** (no por los logs): si el comando corre en un servicio gestionado, copia la salida antes de cerrar la terminal.
+- Detén el servidor antes de aplicar el cambio. No necesita `JWT_SECRET`.
+
+---
+
 ## 💾 Copias de seguridad
 
 El servidor crea automáticamente una copia de la base de datos SQLite (instantánea consistente, sin detener la aplicación) y de los archivos subidos, en `BACKUP_DIR` (por defecto `/app/data/backups`). Comprueba cada hora y crea una nueva solo si la última es más antigua que `BACKUP_INTERVAL_HOURS` (24 h por defecto); se conservan las últimas `BACKUP_RETENTION` (7).
